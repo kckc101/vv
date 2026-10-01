@@ -109,14 +109,7 @@
   .skip-link:focus-visible{ top: max(12px, env(safe-area-inset-top)); }
 
   body{
-    /* Two broad washes of the accent colours across the top of the page. Very
-       low opacity, fixed so they don't travel — enough that the paper has some
-       colour in it rather than sitting flat. */
-    background:
-      radial-gradient(1200px 700px at 12% -12%, rgba(14,111,102,0.13), transparent 62%),
-      radial-gradient(1000px 620px at 92% -4%, rgba(233,178,60,0.20), transparent 60%),
-      var(--page);
-    background-attachment: fixed;
+    background: var(--page);
     min-height:100vh; min-height:100dvh;
     font-family: var(--font-body); font-weight:500;
     color: var(--fg);
@@ -129,12 +122,20 @@
     position:relative;
   }
 
-  /* A paper tooth over the washes, so the page reads as stock rather than as
-     a gradient. */
+  /* A paper tooth over two broad washes of the accent colours across the top
+     of the page. Very low opacity, fixed so they don't travel — enough that
+     the paper has some colour in it rather than sitting flat.
+
+     The washes live here rather than on body with background-attachment:
+     fixed, which iOS Safari ignores (they scrolled away) and which forces a
+     full repaint on every scroll frame on Android. A position:fixed layer
+     gives the same picture on both. */
   body::before{
     content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
     background-image:
-      repeating-linear-gradient(45deg, rgba(36,31,27,0.018) 0 2px, rgba(0,0,0,0) 2px 5px);
+      repeating-linear-gradient(45deg, rgba(36,31,27,0.018) 0 2px, rgba(0,0,0,0) 2px 5px),
+      radial-gradient(1200px 700px at 12% -12%, rgba(14,111,102,0.13), transparent 62%),
+      radial-gradient(1000px 620px at 92% -4%, rgba(233,178,60,0.20), transparent 60%);
   }
   body > *{ position:relative; z-index:1; }
 
@@ -416,8 +417,6 @@
   }
   .party-badge.show{ display:block; }
 
-  .controls{ margin-top:16px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-
   button, input{
     font-family: var(--font-body); font-weight:700; font-size:0.8rem;
     letter-spacing:0.03em; -webkit-appearance:none; appearance:none; touch-action: manipulation;
@@ -508,21 +507,8 @@
   .mode-panel{ animation: panelIn 220ms cubic-bezier(.16,1,.3,1); }
   @keyframes panelIn{ from{ opacity:0; transform: translateY(4px); } to{ opacity:1; transform:none; } }
 
-  /* ---------- Effect strip (photo + reference pairs) ---------- */
-  .strip.effect-strip{ grid-template-columns: 1fr 1fr; }
-  .strip-frame.ref{ box-shadow:none; }
-  .strip-frame.ref img{ object-fit:cover; }
-  .strip-frame.ref::after{ display:none; }
-
-  /* ---------- Single-frame layout (UAE Frame effect: 1 shot, no reference column) ---------- */
+  /* ---------- Single-frame layout (UAE Frame, Photobooth B&W, party poster: 1 shot) ---------- */
   .strip.effect-strip.single-frame{ grid-template-columns: 1fr; }
-  .strip.effect-strip.single-frame .strip-frame.ref,
-  .strip.effect-strip.single-frame #efc1,
-  .strip.effect-strip.single-frame #efc2,
-  .strip.effect-strip.single-frame #efc3,
-  .strip.effect-strip.single-frame #efr1,
-  .strip.effect-strip.single-frame #efr2,
-  .strip.effect-strip.single-frame #efr3{ display:none; }
   /* One print on its own, so it gets a print's proportions: wider margin and a
      chin deep enough to carry the wordmark, matching what the export draws. */
   .strip.effect-strip.single-frame #efc0{
@@ -691,8 +677,6 @@
   .strip-actions{ display:flex; gap:8px; margin-top:18px; width:100%; }
   .strip-actions button{ flex:1; padding:12px 8px; font-size:0.72rem; }
 
-  canvas#exportCanvas{ display:none; }
-
   footer{
     margin-top:44px; font-size:0.74rem; letter-spacing:0.02em;
     color: var(--fg-dim); text-align:center; padding: 0 12px; line-height:1.65;
@@ -762,9 +746,13 @@
   .reel-strip{
     display:flex; align-items:center; gap:14px;
     overflow-x:auto; overscroll-behavior-x:contain;
-    /* The rail owns horizontal; vertical stays with the page, or a swipe that
-       drifts off-axis jitters the whole document. */
-    touch-action: pan-y;
+    /* The rail owns horizontal; vertical stays with the page. This was pan-y
+       alone, which reads the wrong way round: touch-action lists the pans the
+       BROWSER may perform, so pan-y switched off horizontal panning on the one
+       element that scrolls horizontally, and the rail could not be swiped on
+       a phone at all. Both axes are allowed; the browser latches each swipe
+       to the axis it starts on. */
+    touch-action: pan-x pan-y;
     scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
     padding: 14px calc(50% - 27px);
     scrollbar-width:none;
@@ -803,15 +791,6 @@
   .btn-block{ width:100%; }
   .util-canvas{ display:none; }
 
-  .controls[hidden]{ display:none; }
-  .controls button[hidden]{ display:none; }
-  /* With the camera running, Start is gone and the shutter is the widest,
-     highest-contrast thing on the page. Reset shrinks to sit beside it so it
-     can't be mistaken for the button you meant to press. */
-  /* Once the camera is live only Reset is left here — the ring is the shutter. */
-  .controls.live{ justify-content:center; }
-  .controls.live #resetBtn{ flex:0 0 auto; min-width:130px; }
-
   /* Below this the two columns have stacked, so the page is one narrow
      card and the desktop gutters are just wasted width. */
   @media (max-width: 820px){
@@ -822,10 +801,6 @@
 
   @media (max-width: 420px){
     .booth-card{ padding: 13px; }
-    .controls{ flex-direction:column; align-items:stretch; }
-    .controls button{ width:100%; }
-    .controls.live{ flex-direction:row; align-items:center; }
-    .controls.live #resetBtn{ width:auto; flex:0 0 auto; padding:14px 22px; }
     .reel-thumb{ width:48px; height:48px; }
     .reel-strip{ gap:12px; padding: 12px calc(50% - 24px); }
     .mac-window{ border-radius:12px; }
@@ -901,10 +876,8 @@
       <!-- One row: [pips … cancel] [capture] [features →] -->
       <div class="mac-footer">
         <div class="mac-foot-left">
-          <div class="shots-status" id="pips">
-            <div class="shot-pip"></div><div class="shot-pip"></div>
-            <div class="shot-pip"></div><div class="shot-pip"></div>
-          </div>
+          <!-- One pip per shot, built from TOTAL_SHOTS by the script. -->
+          <div class="shots-status" id="pips"></div>
           <button type="button" class="mac-cancel" id="macCancel" hidden
                   aria-label="Cancel selection" title="Cancel selection">&#10005;</button>
         </div>
@@ -920,9 +893,12 @@
         <!-- The open category's features roll past the shutter. The strips
              themselves are built by the reel code further down. -->
         <div class="mac-rail" id="macRail" hidden>
-          <div class="reel-strip" id="stripFilters" role="listbox" aria-label="Filters"></div>
-          <div class="reel-strip" id="stripEffects" role="listbox" aria-label="Effects" hidden></div>
-          <div class="reel-strip" id="stripFriends" role="listbox" aria-label="Party backdrops" hidden></div>
+          <!-- role="group", not listbox: the circles are plain toggle buttons
+               (aria-pressed marks the live one), and a listbox with no
+               options in it was announced as empty. -->
+          <div class="reel-strip" id="stripFilters" role="group" aria-label="Filters"></div>
+          <div class="reel-strip" id="stripEffects" role="group" aria-label="Effects" hidden></div>
+          <div class="reel-strip" id="stripFriends" role="group" aria-label="Party backdrops" hidden></div>
         </div>
       </div>
       </div>
@@ -957,15 +933,14 @@
         <span class="reel-caption" id="reelCaption"></span>
       </div>
 
-      <!-- All three kept in the DOM but never shown. The window's red button
+      <!-- Both kept in the DOM but never shown. The window's red button
            forwards to Start and Capture, so starting the camera and every
            capture still run through one path each (party broadcast included).
            Reset is gone from the page: pressing the shutter again clears the
            strip and reshoots it, which is what people reached for anyway. -->
       <div class="controls" id="controlsRow" hidden>
         <button class="btn-primary" id="startBtn" hidden>Start camera</button>
-        <button class="btn-secondary" id="captureBtn" hidden disabled>Take strip (4 shots)</button>
-        <button class="btn-secondary" id="resetBtn" hidden>Reset</button>
+        <button class="btn-secondary" id="captureBtn" hidden disabled>Take strip</button>
       </div>
 
 
@@ -1020,10 +995,7 @@
     <div class="strip-wrap" id="normalStripWrap">
       <p class="strip-label">Your collage</p>
       <div class="strip" id="strip">
-        <div class="strip-frame empty" id="frame0">01</div>
-        <div class="strip-frame empty" id="frame1">02</div>
-        <div class="strip-frame empty" id="frame2">03</div>
-        <div class="strip-frame empty" id="frame3">04</div>
+        <!-- frame0…frameN-1 are built from TOTAL_SHOTS by the script. -->
         <div class="strip-footer">
           <span class="strip-mark">KC SNAP</span>
           <span class="strip-date" id="stripDateLabel"></span>
@@ -1039,13 +1011,6 @@
       <p class="strip-label" id="effectStripLabel">Your effect strip</p>
       <div class="strip effect-strip" id="effectStrip">
         <div class="strip-frame empty" id="efc0">01</div>
-        <div class="strip-frame ref" id="efr0"><img alt="Reference pose 1"></div>
-        <div class="strip-frame empty" id="efc1">02</div>
-        <div class="strip-frame ref" id="efr1"><img alt="Reference pose 2"></div>
-        <div class="strip-frame empty" id="efc2">03</div>
-        <div class="strip-frame ref" id="efr2"><img alt="Reference pose 3"></div>
-        <div class="strip-frame empty" id="efc3">04</div>
-        <div class="strip-frame ref" id="efr3"><img alt="Reference pose 4"></div>
       </div>
       <div class="strip-actions">
         <button class="btn-secondary" id="downloadEffectBtn" disabled>Download</button>
@@ -1054,7 +1019,6 @@
 
   </main>
 
-  <canvas id="exportCanvas"></canvas>
   <canvas id="localCutoutCanvas" class="util-canvas"></canvas>
   <canvas id="remoteCutoutCanvas" class="util-canvas"></canvas>
   <canvas id="effectCutoutCanvas" class="util-canvas"></canvas>
@@ -1098,6 +1062,8 @@
 <script>
 (() => {
   const TOTAL_SHOTS = 4;
+  const SHUTTER_STRIP_LABEL = 'Take strip (' + TOTAL_SHOTS + ' shots)';
+  const SHUTTER_SINGLE_LABEL = 'Take photo (1 shot)';
 
   /* ============================================================
      CONFIG
@@ -1129,6 +1095,17 @@
     { id: 'bg5_stars', label: 'Starfield', src: STARFIELD_SRC },
   ];
 
+  /* One decoded copy per backdrop, for compositing. The UAE poster and the
+     starfield are the same art the effects already hold, so they share those
+     Image objects instead of decoding a second full-size bitmap each. */
+  const bgImages = PARTY_BACKGROUNDS.map(bg => {
+    if (bg.src === UAE_BG_SRC) return uaeBgImg;
+    if (bg.src === STARFIELD_SRC) return starBgImg;
+    const im = new Image();
+    im.src = bg.src;
+    return im;
+  });
+
   const video = document.getElementById('video');
   const remoteVideo = document.getElementById('remoteVideo');
   const freezeCanvas = document.getElementById('freezeCanvas');
@@ -1138,21 +1115,33 @@
   const placeholder = document.getElementById('placeholder');
   const startBtn = document.getElementById('startBtn');
   const captureBtn = document.getElementById('captureBtn');
-  const resetBtn = document.getElementById('resetBtn');
   const downloadBtn = document.getElementById('downloadBtn');
   const countdownEl = document.getElementById('countdown');
   const flashEl = document.getElementById('flash');
   const recDot = document.getElementById('recDot');
   const shotCount = document.getElementById('shotCount');
-  const pips = document.querySelectorAll('.shot-pip');
   const pipsRow = document.getElementById('pips');
-  const exportCanvas = document.getElementById('exportCanvas');
   const localCutoutCanvas = document.getElementById('localCutoutCanvas');
   const remoteCutoutCanvas = document.getElementById('remoteCutoutCanvas');
   const payModal = document.getElementById('payModal');
   const payReceiptBody = document.getElementById('payReceiptBody');
-  const qrImg = document.getElementById('qrImg');
-  const qrFrame = document.getElementById('qrFrame');
+
+  /* The pips and the strip's frames used to be four hand-written copies each
+     in the markup, so TOTAL_SHOTS could not change without editing both. */
+  const stripEl = document.getElementById('strip');
+  const stripFooter = stripEl.querySelector('.strip-footer');
+  for (let i = 0; i < TOTAL_SHOTS; i++){
+    const pip = document.createElement('div');
+    pip.className = 'shot-pip';
+    pipsRow.appendChild(pip);
+    const frame = document.createElement('div');
+    frame.className = 'strip-frame empty';
+    frame.id = 'frame' + i;
+    frame.textContent = String(i + 1).padStart(2, '0');
+    stripEl.insertBefore(frame, stripFooter);
+  }
+  const pips = pipsRow.querySelectorAll('.shot-pip');
+  shotCount.textContent = '0 / ' + TOTAL_SHOTS;
 
   const addFriendBtn = document.getElementById('addFriendBtn');
   const partyControls = document.getElementById('partyControls');
@@ -1180,7 +1169,6 @@
   const segStatus = document.getElementById('segStatus');
   const booth = document.querySelector('.booth');
   const cameraBar = document.getElementById('cameraBar');
-  const controlsRow = document.getElementById('controlsRow');
   const facingGroup = document.getElementById('facingGroup');
   const zoomGroup = document.getElementById('zoomGroup');
   const camReadout = document.getElementById('camReadout');
@@ -1203,8 +1191,6 @@
   /* Nothing that changes what is being shot may move mid-sequence. */
   function setControlsLocked(on){
     if (booth) booth.classList.toggle('locked', on);
-    if (reel) reel.classList.toggle('shooting', on);
-    resetBtn.disabled = on;
   }
 
   /* Auto smooth-face: a light, always-on skin-smoothing base, layered
@@ -1226,12 +1212,37 @@
      full colour on phone, and why a chosen filter chip looked right in the
      live preview (CSS filter on the <video> works fine) yet came out flat in
      the captured/downloaded image. We detect it once and tone pixels by hand.
+
+     Detection has to look at pixels. It used to assign ctx.filter and read
+     it back — but on an engine with no filter attribute at all (Safari/iOS
+     before 18, and every in-app browser built on it) that assignment just
+     creates a plain JS property, reads back fine, and the probe said "yes"
+     on exactly the browsers it exists to catch. So draw black through
+     invert(1) and see whether it came out white. A second, unfiltered pixel
+     is the control: if even that doesn't read back as opaque black, pixel
+     readback itself is being shielded (privacy modes), the manual fallback
+     couldn't work either, and the property check is all we have to go on.
      ------------------------------------------------------------------ */
   const CTX_FILTER_OK = (() => {
     try {
-      const t = document.createElement('canvas').getContext('2d');
-      t.filter = 'blur(1px)';
-      return t.filter === 'blur(1px)';
+      const src = document.createElement('canvas');
+      src.width = 1; src.height = 1;
+      const s = src.getContext('2d');
+      s.fillStyle = '#000';
+      s.fillRect(0, 0, 1, 1);
+
+      const probe = document.createElement('canvas');
+      probe.width = 2; probe.height = 1;
+      const t = probe.getContext('2d', { willReadFrequently: true });
+      t.filter = 'invert(1)';
+      if (t.filter !== 'invert(1)') return false;
+      t.drawImage(src, 0, 0);       // pixel 0: through the filter
+      t.filter = 'none';
+      t.drawImage(src, 1, 0);       // pixel 1: the control
+      const d = t.getImageData(0, 0, 2, 1).data;
+      const controlOk = d[4] < 40 && d[5] < 40 && d[6] < 40 && d[7] > 200;
+      if (!controlOk) return true;
+      return d[0] > 200 && d[1] > 200 && d[2] > 200;
     } catch (e) { return false; }
   })();
 
@@ -1297,7 +1308,13 @@
           0.213-0.213*sat, 0.715-0.715*sat, 0.072+0.928*sat, 0, 0,
           0,0,0,1,0]);
       } else if (fn === 'hue-rotate'){
-        const rad = v * Math.PI / 180;      // parseFloat already dropped "deg"
+        // parseFloat dropped the unit; CSS also accepts rad, grad and turn.
+        const unit = (raw.match(/[a-z]+$/i) || ['deg'])[0].toLowerCase();
+        const deg = unit === 'turn' ? v * 360
+                  : unit === 'rad'  ? v * 180 / Math.PI
+                  : unit === 'grad' ? v * 0.9
+                  : v;
+        const rad = deg * Math.PI / 180;
         const c = Math.cos(rad), sn = Math.sin(rad);
         m = matCompose(m, [
           0.213+c*0.787-sn*0.213, 0.715-c*0.715-sn*0.715, 0.072-c*0.072+sn*0.928, 0, 0,
@@ -1425,11 +1442,9 @@
   let mediaCall = null;
   let partyConn = null;
 
-  /* -------- QR code (payment) -------- */
-  qrImg.onerror = () => {
-    qrFrame.innerHTML = '<span class="qr-fallback">QR code not found — check QR_CODE_IMAGE_PATH</span>';
-  };
-  qrImg.src = QR_CODE_IMAGE_PATH;
+  /* The payment QR is no longer decoded at page load. It is a third of a
+     megabyte of PNG that only the paywall ever shows, and showPayStep()
+     assigns it to a fresh <img> every time it opens anyway. */
 
   function setPlaceholder(msg){
     placeholder.style.display = 'flex';
@@ -1491,6 +1506,24 @@
     if (reelCaption) reelCaption.textContent = text;
   }
 
+  /* The reel circles show a small cover-cropped copy of each backdrop, made
+     once, rather than every 44px circle holding its own full-size decode of
+     the same poster. */
+  const THUMB_PX = 108;
+  function whenImageReady(img, fn){
+    if (img.complete && img.naturalWidth) { fn(); return; }
+    img.addEventListener('load', fn, { once: true });
+  }
+  function setThumbFrom(el, source){
+    whenImageReady(source, () => {
+      const c = document.createElement('canvas');
+      c.width = THUMB_PX; c.height = THUMB_PX;
+      drawCoverImage(c.getContext('2d'), source, 0, 0, THUMB_PX, THUMB_PX, false);
+      try { el.src = c.toDataURL('image/jpeg', 0.82); }
+      catch (e) { el.src = source.src; }
+    });
+  }
+
   function makeThumb(label){
     const b = document.createElement('button');
     b.type = 'button';
@@ -1541,10 +1574,11 @@
   });
 
   // ---- party backdrop strip ----
-  const bgThumbs = PARTY_BACKGROUNDS.map(bg => {
+  const bgThumbs = PARTY_BACKGROUNDS.map((bg, k) => {
     const b = makeThumb(bg.label + ' backdrop');
     const im = document.createElement('img');
-    im.src = bg.src; im.alt = '';
+    im.alt = '';
+    setThumbFrom(im, bgImages[k]);
     b.appendChild(im);
     document.getElementById('stripFriends').appendChild(b);
     return b;
@@ -1580,7 +1614,10 @@
     const s = STRIPS.find(x => x.mode === currentMode);
     if (!s) return;
     const i = activeIndexFor(currentMode);
-    s.thumbs.forEach((t, k) => t.classList.toggle('active', k === i));
+    s.thumbs.forEach((t, k) => {
+      t.classList.toggle('active', k === i);
+      t.setAttribute('aria-pressed', String(k === i));
+    });
     reelName.textContent = labelFor(currentMode, i);
   }
 
@@ -1775,21 +1812,13 @@
   const effectCutoutCanvas = document.getElementById('effectCutoutCanvas');
   const effectCutCtx = effectCutoutCanvas.getContext('2d');
 
-  document.getElementById('effectThumb4').src = UAE_BG_SRC;
-  document.getElementById('effectThumb6').src = STARFIELD_SRC;
+  setThumbFrom(document.getElementById('effectThumb4'), uaeBgImg);
+  setThumbFrom(document.getElementById('effectThumb6'), starBgImg);
 
+  // Both segmented effects (UAE Frame, Starfield) keep the cutout transparent
+  // so the person stands in front of whatever is already on effectCanvas.
   function onEffectSegResult(results){
     if (!drawCutout(effectCutCtx, effectCutoutCanvas, results, video, mirrorPreview, 'effect')) return;
-    // Backdrop effects (UAE Frame, Starfield) keep the cutout transparent so
-    // the person stands in front of whatever is already on effectCanvas.
-    if (activeEffect !== 4 && activeEffect !== 6){
-      const c = effectCutCtx;
-      c.save();
-      c.globalCompositeOperation = 'destination-over';
-      c.fillStyle = '#ffffff';
-      c.fillRect(0, 0, effectCutoutCanvas.width, effectCutoutCanvas.height);
-      c.restore();
-    }
     effectCutAt = performance.now();
   }
 
@@ -1808,7 +1837,9 @@
       // (cutout, cleanly clipped) into just the framed photo rectangle —
       // like standing behind a photo-booth cutout board.
       const bw = uaeBgImg.naturalWidth || 700, bh = uaeBgImg.naturalHeight || 1044;
-      if (effectCanvas.width !== bw){ effectCanvas.width = bw; effectCanvas.height = bh; }
+      // Both sides: Starfield sizes this canvas off the camera, and a portrait
+      // camera can leave it at a matching width with a different height.
+      if (effectCanvas.width !== bw || effectCanvas.height !== bh){ effectCanvas.width = bw; effectCanvas.height = bh; }
       const ctx = effectCanvas.getContext('2d');
       ctx.clearRect(0, 0, bw, bh);
       if (uaeBgImg.complete && uaeBgImg.naturalWidth) ctx.drawImage(uaeBgImg, 0, 0, bw, bh);
@@ -1833,7 +1864,7 @@
         effectCanvas.width = w; effectCanvas.height = h;
       }
       const ctx = effectCanvas.getContext('2d');
-      if (starBgImg.complete && starBgImg.naturalWidth) drawCoverImageEl(ctx, starBgImg, 0, 0, w, h);
+      if (starBgImg.complete && starBgImg.naturalWidth) drawCoverImage(ctx, starBgImg, 0, 0, w, h, false);
       else { ctx.fillStyle = '#060a18'; ctx.fillRect(0, 0, w, h); }
       if (effectCutFresh()){
         /* A cutout dropped straight onto a night sky reads as a sticker: it is
@@ -1858,7 +1889,7 @@
         ctx.restore();
 
         drawLightWrap(ctx, effectCutoutCanvas, (c, cw, ch) => {
-          if (starBgImg.complete && starBgImg.naturalWidth) drawCoverImageEl(c, starBgImg, 0, 0, cw, ch);
+          if (starBgImg.complete && starBgImg.naturalWidth) drawCoverImage(c, starBgImg, 0, 0, cw, ch, false);
           else { c.fillStyle = '#060a18'; c.fillRect(0, 0, cw, ch); }
         }, w, h, 0.42);
       }
@@ -1867,7 +1898,7 @@
       // Photobooth B&W — no segmentation needed, we just tone the whole
       // mirrored feed and pin it onto an original corkboard/instant-photo scene.
       const w = 720, h = 960;
-      if (effectCanvas.width !== w){ effectCanvas.width = w; effectCanvas.height = h; }
+      if (effectCanvas.width !== w || effectCanvas.height !== h){ effectCanvas.width = w; effectCanvas.height = h; }
       const ctx = effectCanvas.getContext('2d');
       drawPhotoboothScene(ctx, w, h, (x, y, pw, ph) => {
         if (video.readyState >= 2 && video.videoWidth){
@@ -1878,14 +1909,6 @@
           ctx.fillRect(x, y, pw, ph);
         }
       });
-    } else if (activeEffect > 0){
-      const w = 960, h = 720;
-      if (effectCanvas.width !== w){ effectCanvas.width = w; effectCanvas.height = h; }
-      const ctx = effectCanvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-      if (effectCutFresh()) drawCoverImage(ctx, effectCutoutCanvas, 0, 0, w, h, false);
-      else if (video.readyState >= 2) drawCoverImage(ctx, video, 0, 0, w, h, mirrorPreview);
     }
     requestAnimationFrame(effectCompositeLoop);
   }
@@ -1893,14 +1916,53 @@
 
   /* UAE Frame and Photobooth B&W already bake their own look. Stacking a
      colour chip on top of them (Disco Neon over a B&W tone, say) is never what
-     anyone meant, so those two reset the chip to Normal. Effects 1-3 shoot on
-     a plain white backdrop, where a filter is a fair creative choice. */
+     anyone meant, so those two reset the chip to Normal. */
   function resetFilterToNormal(){
     if (currentFilter === 'none') return;
     applyFilterIndex(0);
   }
 
+  /* ---- strip layouts ----
+     Every mode lands on one of two collage layouts: the ordinary four-frame
+     strip, or one big print (UAE Frame, Photobooth B&W, a party poster).
+     Each switch used to restate the same dozen lines by hand. */
+  function resetEffectFrame(){
+    effectShots = [];
+    downloadEffectBtn.disabled = true;
+    const f0 = document.getElementById('efc0');
+    f0.classList.add('empty');
+    f0.innerHTML = '01';
+  }
+
+  function showSingleFrameStrip(label, w, h){
+    // Reshape the viewfinder to the poster's own aspect ratio so the WHOLE
+    // image shows (nothing cropped off by the usual camera window).
+    setFrameAspect(w, h);
+    document.documentElement.style.setProperty('--single-frame-aspect', w + ' / ' + h);
+    normalStripWrap.hidden = true;
+    effectStripWrap.hidden = false;
+    effectStripLabel.textContent = label;
+    effectStrip.classList.add('single-frame');
+    resetEffectFrame();
+    setShutterLabel(SHUTTER_SINGLE_LABEL);
+    pipsRow.hidden = true;
+    shotCount.textContent = '0 / 1';
+  }
+
+  function showFourFrameStrip(){
+    applyBaseAspect();
+    effectStrip.classList.remove('single-frame');
+    normalStripWrap.hidden = false;
+    effectStripWrap.hidden = true;
+    setShutterLabel(SHUTTER_STRIP_LABEL);
+    pipsRow.hidden = false;
+    shotCount.textContent = shots.length + ' / ' + TOTAL_SHOTS;
+  }
+
   function setEffect(id){
+    // Anything EFFECT_ITEMS doesn't list (the old pose effects 1-3 among
+    // them) falls back to no effect rather than a half-configured one.
+    if (id !== 0 && !EFFECT_ITEMS.some(e => e.id === id)) id = 0;
     activeEffect = id;
     setTimeout(scrollActiveIntoRing, 0);   // after this function finishes its layout work
     // force applyPartyBgLayout to re-evaluate once we land back on id 0
@@ -1908,102 +1970,52 @@
     syncReel();
 
     if (id === 0){
-      applyBaseAspect();
-      effectStrip.classList.remove('single-frame');
-      normalStripWrap.hidden = false;
-      effectStripWrap.hidden = true;
-      setShutterLabel('Take strip (4 shots)');
+      showFourFrameStrip();
       effectCanvas.style.display = 'none';
       if (!partyMode) video.classList.remove('cam-hidden');
       effectCutAt = 0;
-      pipsRow.hidden = false;
-      shotCount.textContent = shots.length + ' / ' + TOTAL_SHOTS;
       /* Leaving a single-shot effect (UAE Frame / Photobooth) used to strand
          that capture in effectShots with no visible strip pointing at it —
          switching tabs silently discarded it later with no warning, the next
          time that effect was reselected. Discard it here instead, at the one
          place that actually knows the shot is being abandoned, so nothing is
          left dangling in a hidden, unreachable state. */
-      effectShots = [];
-      downloadEffectBtn.disabled = true;
-      const efc0Reset = document.getElementById('efc0');
-      efc0Reset.classList.add('empty');
-      efc0Reset.innerHTML = '01';
+      resetEffectFrame();
       applyPartyBgLayout();   // restore the poster layout if a party is running
-    } else if (id === 4){
-      // Single-shot "frame" effect — no pose reference strip needed.
-      // Reshape the viewfinder to the poster's own aspect ratio so the
-      // WHOLE image shows (nothing cropped off by the usual 4:3 window).
-      const bw0 = uaeBgImg.naturalWidth || 700, bh0 = uaeBgImg.naturalHeight || 1044;
-      setFrameAspect(bw0, bh0);
-      document.documentElement.style.setProperty('--single-frame-aspect', bw0 + ' / ' + bh0);
+      return;
+    }
+
+    video.classList.add('cam-hidden');
+    effectCanvas.style.display = 'block';
+    effectCutAt = 0;
+    if (id === 4){
+      // Single-shot "frame" effect, sized to the poster.
       resetFilterToNormal();
-      normalStripWrap.hidden = true;
-      effectStripWrap.hidden = false;
-      effectStripLabel.textContent = 'UAE Frame shot';
-      effectStrip.classList.add('single-frame');
-      const frame0 = document.getElementById('efc0');
-      frame0.classList.add('empty');
-      frame0.innerHTML = '01';
-      effectShots = [];
-      downloadEffectBtn.disabled = true;
-      setShutterLabel('Take photo (1 shot)');
-
-      video.classList.add('cam-hidden');
-      effectCanvas.style.display = 'block';
-      effectCutAt = 0;
+      showSingleFrameStrip('UAE Frame shot', uaeBgImg.naturalWidth || 700, uaeBgImg.naturalHeight || 1044);
       ensureSegmenter();
-      pipsRow.hidden = true;
-      shotCount.textContent = '0 / 1';
-    } else if (id === 6){
-      // Starfield — a backdrop swap, so it keeps the ordinary four-frame strip,
-      // the ordinary download, and the camera's own full field of view.
-      applyBaseAspect();
-      effectStrip.classList.remove('single-frame');
-      normalStripWrap.hidden = false;
-      effectStripWrap.hidden = true;
-      setShutterLabel('Take strip (4 shots)');
-
-      video.classList.add('cam-hidden');
-      effectCanvas.style.display = 'block';
-      effectCutAt = 0;
-      ensureSegmenter();
-      pipsRow.hidden = false;
-      shotCount.textContent = shots.length + ' / ' + TOTAL_SHOTS;
     } else if (id === 5){
       // Photobooth B&W — original corkboard scene, single shot, no segmentation.
-      setFrameAspect(3, 4);
-      document.documentElement.style.setProperty('--single-frame-aspect', '3 / 4');
       resetFilterToNormal();
-      normalStripWrap.hidden = true;
-      effectStripWrap.hidden = false;
-      effectStripLabel.textContent = 'Photobooth shot';
-      effectStrip.classList.add('single-frame');
-      const frame0b = document.getElementById('efc0');
-      frame0b.classList.add('empty');
-      frame0b.innerHTML = '01';
-      effectShots = [];
-      downloadEffectBtn.disabled = true;
-      setShutterLabel('Take photo (1 shot)');
-
-      video.classList.add('cam-hidden');
-      effectCanvas.style.display = 'block';
-      effectCutAt = 0;
-      pipsRow.hidden = true;
-      shotCount.textContent = '0 / 1';
-    } else {
-      // EFFECT_ITEMS never lists an id outside 4/5/6, so nothing in the UI
-      // can reach this — kept only as a safety net against a bad call.
-      setEffect(0);
+      showSingleFrameStrip('Photobooth shot', 3, 4);
+    } else if (id === 6){
+      // Starfield — a backdrop swap, so it keeps the ordinary four-frame strip,
+      // the ordinary download, and the camera's own full field of view. A
+      // single-shot capture left behind by the effect we came from is
+      // abandoned here just as it is on the way back to id 0.
+      showFourFrameStrip();
+      resetEffectFrame();
+      ensureSegmenter();
     }
   }
 
-  async function runEffectCapture(){
-    // Only ids 4 (UAE Frame) and 5 (Photobooth B&W) ever reach this function
-    // — see usesNormalStrip() in runCaptureSequence — and both are single-shot.
+  /* One countdown, one shot, into the single big print. Shared by the two
+     single-shot effects (UAE Frame, Photobooth B&W) and a party backdrop that
+     declares a photo box — these were two identical copies. */
+  async function runSingleShot(run){
     effectShots = [];
-    await runCountdown(COUNT_FROM);
-    const url = snap();
+    await runCountdown(COUNT_FROM, run);
+    if (run.aborted) return;
+    const url = snap(run.source);
     effectShots.push(url);
     const frame = document.getElementById('efc0');
     frame.classList.remove('empty');
@@ -2012,28 +2024,18 @@
     img.src = url;
     frame.appendChild(img);
     shotCount.textContent = '1 / 1';
-    downloadEffectBtn.disabled = false;
-  }
-
-  function drawCoverImageEl(ctx, img, x, y, w, h){
-    if (!img || !img.width || !img.height) return;
-    const ir = img.width / img.height, dr = w / h;
-    let sw, sh, sx, sy;
-    if (ir > dr){ sh = img.height; sw = sh * dr; sx = (img.width - sw) / 2; sy = 0; }
-    else { sw = img.width; sh = sw / dr; sx = 0; sy = (img.height - sh) / 2; }
-    ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
   }
 
   function downloadEffectCollage(){
     // Only single-shot effects (UAE Frame / Photobooth B&W) and a party-frame
-    // capture ever populate effectShots — see runEffectCapture() and
-    // runPartyFrameCapture() — so a single framed photo is the only case here.
+    // capture ever populate effectShots — see runSingleShot() — so a single
+    // framed photo is the only case here.
     if (!effectShots.length) return;
     const tag = (partyMode && partyBgFrame() && activeEffect === 0) ? 'party-frame'
               : activeEffect === 5 ? 'photobooth' : 'uae';
     // Same Polaroid renderer as the four-frame strip — one shot just lands as
     // a single large print instead of a 2x2 block.
-    renderPolaroidCollage(effectShots, `kc-snap-${tag}-${Date.now()}.jpg`)
+    downloadShots(effectShots, `kc-snap-${tag}-${Date.now()}.jpg`)
       .catch(err => console.error(err));
   }
 
@@ -2241,10 +2243,26 @@
       : '';
   }
 
+  async function firstStreamFrom(tiers){
+    let err = null;
+    for (const t of tiers){
+      try { return { next: await navigator.mediaDevices.getUserMedia({ video: t, audio: false }), err: null }; }
+      catch (e) { err = e; }
+    }
+    return { next: null, err };
+  }
+
+  // The errors a device gives when the camera is fine but already held open.
+  function isCameraBusyError(err){
+    const name = err && err.name;
+    return name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError';
+  }
+
   /* Opens (or reopens) the camera. Kept as one path so the initial start and
      every later front/back/zoom change go through exactly the same logic. */
-  async function openCamera(facing, zoom){
+  async function openCamera(facing, zoom, isRetry){
     const deviceId = pickDeviceFor(facing, zoom);
+    const facingChanged = facing !== currentFacing;
     const fps = { ideal: 30, max: 30 };
     /* No aspectRatio constraint on purpose. Pinning one makes Chrome crop the
        sensor to match, which is what kept the front camera looking narrow —
@@ -2256,12 +2274,25 @@
     tiers.push({ facingMode: { ideal: facing } });
     tiers.push(true);
 
-    let next = null, err = null;
-    for (const t of tiers){
-      try { next = await navigator.mediaDevices.getUserMedia({ video: t, audio: false }); break; }
-      catch (e) { err = e; }
+    const { next, err } = await firstStreamFrom(tiers);
+    if (!next){
+      /* The new camera is opened before the old one is stopped, so a party
+         never sees a gap. Many phones can't hold two cameras open at once,
+         though, and there every tier failed and Front/Back silently snapped
+         back. On that error only, let go of the old camera and try again —
+         and if that fails too, put the old one back rather than leave the
+         booth dark. */
+      if (stream && !isRetry && isCameraBusyError(err)){
+        stream.getTracks().forEach(t => t.stop());
+        try { return await openCamera(facing, zoom, true); }
+        catch (retryErr) {
+          try { await openCamera(currentFacing, currentZoom, true); }
+          catch (restoreErr) { onCameraLost(); }
+          throw retryErr;
+        }
+      }
+      throw (err || new Error('no camera'));
     }
-    if (!next) throw (err || new Error('no camera'));
 
     const track = next.getVideoTracks()[0];
     await maximizeTrack(track);
@@ -2281,15 +2312,26 @@
     const old = stream;
     stream = next;
     video.srcObject = stream;
+    // The autoplay attribute alone leaves a srcObject stream paused (a black
+    // preview) in some Android WebViews and in-app browsers.
+    const playing = video.play && video.play();
+    if (playing && playing.catch) playing.catch(() => {});
     if (old) old.getTracks().forEach(t => { if (t !== track) t.stop(); });
+    // 'ended' never fires for our own stop() calls, only when something
+    // outside the page takes the camera away.
+    if (track) track.addEventListener('ended', () => { if (stream === next) onCameraLost(); });
 
     currentFacing = facing;
     currentZoom = zoom;
+    const wideChip = zoomGroup.querySelector('.cam-chip[data-zoom="0.5"]');
+    /* "No wider lens" is a fact about one camera. It used to outlive the
+       switch to the back camera — which is where the ultra-wide usually is —
+       and leave 0.5x disabled for the rest of the session. */
+    if (wideChip && facingChanged) wideChip.removeAttribute('title');
     /* Most front cameras have no second, wider module and no sub-1 zoom range,
        so 0.5x silently did nothing while the chip stayed lit. Say so instead. */
     if (zoom <= 0.5 && !deviceIsWide(deviceId) && !trackGoesWider(track)){
       currentZoom = 1;
-      const wideChip = zoomGroup.querySelector('.cam-chip[data-zoom="0.5"]');
       if (wideChip){
         wideChip.disabled = true;
         wideChip.title = 'This camera has no wider lens';
@@ -2370,8 +2412,25 @@
   const scaleRemoteSeg = makeSegScaler();
   const scaleEffectSeg = makeSegScaler();
 
-  async function ensureCamera(){
-    if (stream) return stream;
+  /* Registered once, here, rather than inside the start path — that ran
+     again every time the camera had to be restarted and stacked a fresh pair
+     of listeners each time. Neither fires until a stream is attached. */
+  video.addEventListener('loadedmetadata', () => { syncViewfinderAspect(); updateCamReadout(); refreshFilterPreviews(); });
+  video.addEventListener('resize', () => { syncViewfinderAspect(); updateCamReadout(); refreshFilterPreviews(); });
+
+  /* The shutter, Create a room and Connect can all start the camera. Two of
+     them tapped in quick succession used to run two getUserMedia requests in
+     parallel; now the second caller waits on the first. */
+  let cameraStarting = null;
+  function ensureCamera(){
+    if (stream) return Promise.resolve(stream);
+    if (!cameraStarting){
+      cameraStarting = startCamera().finally(() => { cameraStarting = null; });
+    }
+    return cameraStarting;
+  }
+
+  async function startCamera(){
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setPlaceholder("This browser can't access the camera.<br>Try the latest Chrome, Safari, Firefox, or Edge, and make sure the page is loaded over https:// (or localhost).");
       throw new Error('no getUserMedia');
@@ -2379,8 +2438,6 @@
     await refreshDeviceList();      // labels are blank pre-permission; refreshed again after
     await openCamera(currentFacing, currentZoom);
 
-    video.addEventListener('loadedmetadata', () => { syncViewfinderAspect(); updateCamReadout(); refreshFilterPreviews(); });
-    video.addEventListener('resize', () => { syncViewfinderAspect(); updateCamReadout(); refreshFilterPreviews(); });
     cameraBar.hidden = false;
     video.style.filter = withBeauty(currentFilter);
     placeholder.style.display = 'none';
@@ -2389,7 +2446,6 @@
        was always going to become. */
     startBtn.disabled = true;
     startBtn.hidden = true;
-    controlsRow.classList.add('live');
     captureBtn.disabled = false;
     macShutter.classList.remove('is-start');
     macShutter.setAttribute('aria-label', 'Take photo');
@@ -2399,6 +2455,29 @@
     syncReel();
     refreshFilterPreviews();
     return stream;
+  }
+
+  /* The camera can be taken away without the page asking: the OS reclaims it
+     for a phone call, the permission is revoked, a USB webcam is unplugged.
+     Nothing noticed. The preview froze, the shutter kept shooting black
+     frames, and ensureCamera() kept returning the dead stream, so only a
+     reload brought the camera back. Now the booth drops back to its start
+     state and the same red button starts the camera again. */
+  function onCameraLost(){
+    const dead = stream;
+    stream = null;
+    if (dead) dead.getTracks().forEach(t => { try { t.stop(); } catch (e) { /* already gone */ } });
+    video.srcObject = null;
+    if (captureRun) captureRun.aborted = true;
+    cameraBar.hidden = true;
+    recDot.classList.remove('live');
+    captureBtn.disabled = true;
+    startBtn.disabled = false;
+    macShutter.classList.add('is-start');
+    macShutter.setAttribute('aria-label', 'Start camera');
+    macShutter.setAttribute('title', 'Start camera');
+    macShutter.disabled = false;
+    setPlaceholder('The camera stopped.<br>Tap the camera button to start it again.');
   }
 
   startBtn.addEventListener('click', async () => {
@@ -2439,10 +2518,11 @@
   const COUNT_TICK_MS = 1000;
   const BETWEEN_SHOTS_MS = 280;
 
-  async function runCountdown(n){
+  async function runCountdown(n, run){
     countdownEl.style.display = 'flex';
     countdownEl.textContent = '';
     for (let i = n; i > 0; i--){
+      if (run && run.aborted) break;
       countdownEl.dataset.count = i;
       countdownEl.classList.remove('pop');
       void countdownEl.offsetWidth;
@@ -2453,10 +2533,19 @@
     countdownEl.classList.remove('pop');
   }
 
-  function snap(){
+  /* What a capture is shooting, fixed when the sequence starts. snap() used to
+     re-read partyMode and activeEffect for every shot, so a friend joining or
+     leaving mid-strip switched the source between frames. */
+  function currentCaptureSource(){
+    if (activeEffect > 0) return 'effect';
+    if (partyMode) return 'party';
+    return 'camera';
+  }
+
+  function snap(source){
     let w, h;
-    if (activeEffect > 0) { w = effectCanvas.width; h = effectCanvas.height; }
-    else if (partyMode) {
+    if (source === 'effect') { w = effectCanvas.width; h = effectCanvas.height; }
+    else if (source === 'party') {
       w = partyCanvas.width; h = partyCanvas.height;
       /* partyCanvas is currently always 960x720 (or the poster's own size for
          a framed backdrop), which happens to equal the default 4:3 — but the
@@ -2489,10 +2578,10 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, w, h);
     if (CTX_FILTER_OK) ctx.filter = withBeauty(currentFilter);
-    if (activeEffect > 0) {
+    if (source === 'effect') {
       if (usesNormalStrip(activeEffect)) setCollageFrameAspect(w, h);
       ctx.drawImage(effectCanvas, 0, 0, w, h);
-    } else if (partyMode) {
+    } else if (source === 'party') {
       ctx.drawImage(partyCanvas, 0, 0, w, h);
     } else {
       drawCoverImage(ctx, video, 0, 0, w, h, mirrorPreview);
@@ -2518,59 +2607,91 @@
     shotCount.textContent = shots.length + ' / ' + TOTAL_SHOTS;
   }
 
-  // Single framed shot — used when a party background defines a photo box.
-  async function runPartyFrameCapture(){
-    effectShots = [];
-    await runCountdown(COUNT_FROM);
-    const url = snap();
-    effectShots.push(url);
-    const frame = document.getElementById('efc0');
-    frame.classList.remove('empty');
-    frame.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = url;
-    frame.appendChild(img);
-    shotCount.textContent = '1 / 1';
-    downloadEffectBtn.disabled = false;
+  /* The sequence in flight. A lost camera or a friend leaving a party shot
+     marks it aborted, and it stops at the next countdown tick instead of
+     shooting black frames or a frozen party canvas into the strip. */
+  let captureRun = null;
+
+  /* Changes that would reshape the booth mid-sequence are held until the
+     sequence ends: a backdrop picked on the other device, the switch into or
+     out of the poster layout, and a friend's call connecting. The other
+     device's 'bg' message used to be applied immediately — locking the local
+     controls did nothing for it — and could flip the strip layout and wipe
+     the shot being taken. */
+  let pendingRemoteBg = null;
+  let pendingPartyRole = null;
+  let partyLayoutPending = false;
+
+  function applyDeferredPartyChanges(){
+    if (pendingPartyRole){
+      const role = pendingPartyRole;
+      pendingPartyRole = null;
+      if (mediaCall) enterPartyMode(role);
+    }
+    if (pendingRemoteBg !== null){
+      const i = pendingRemoteBg;
+      pendingRemoteBg = null;
+      if (partyMode) updateBgUIFromRemote(i);
+    }
+    if (partyLayoutPending){
+      partyLayoutPending = false;
+      applyPartyBgLayout();
+    }
   }
 
   async function runCaptureSequence(){
     if (busy || !stream) return;
     busy = true;
+    const run = { aborted: false, source: currentCaptureSource() };
+    captureRun = run;
     captureBtn.disabled = true;
     macShutter.disabled = true;
     startBtn.disabled = true;
+    /* Download stayed live while a new strip was shot over the old one, and
+       the photo column isn't under the booth's lock — a tap mid-sequence
+       exported whatever 1-3 shots had landed so far. */
+    downloadBtn.disabled = true;
+    downloadEffectBtn.disabled = true;
     /* Effect chips, filter chips, mode tabs and Reset were all still live
        during the countdown. Switching effects mid-strip left the loop running
        against the new one and mixed the shots together. */
     setControlsLocked(true);
+    let shotSet = null;
     try {
-      if (activeEffect > 0 && !usesNormalStrip(activeEffect)){
-        await runEffectCapture();
-      } else if (partyMode && partyBgFrame()){
-        await runPartyFrameCapture();
+      if (run.source === 'effect' && !usesNormalStrip(activeEffect)){
+        await runSingleShot(run);
+        shotSet = effectShots;
+      } else if (run.source === 'party' && partyBgFrame()){
+        await runSingleShot(run);
+        shotSet = effectShots;
       } else {
         shots = [];
         pips.forEach(p => p.classList.remove('filled'));
         for (let i = 0; i < TOTAL_SHOTS; i++){
-          await runCountdown(COUNT_FROM);
-          const url = snap();
+          await runCountdown(COUNT_FROM, run);
+          if (run.aborted) break;
+          const url = snap(run.source);
           shots.push(url);
           updateStripFrame(i, url);
           await wait(BETWEEN_SHOTS_MS);
         }
-        downloadBtn.disabled = false;
+        shotSet = shots;
       }
     } finally {
       // A throw anywhere above used to leave the booth locked and the
       // countdown pinned on screen with no way back.
+      captureRun = null;
       countdownEl.style.display = 'none';
       setControlsLocked(false);
-      captureBtn.disabled = false;
+      captureBtn.disabled = !stream;
       macShutter.disabled = false;
-      startBtn.disabled = true;
+      startBtn.disabled = !!stream;
+      downloadBtn.disabled = shots.length < TOTAL_SHOTS;
+      downloadEffectBtn.disabled = !effectShots.length;
       busy = false;
+      applyDeferredPartyChanges();
     }
+    if (!run.aborted && shotSet && shotSet.length) prepareCollage(shotSet);
   }
 
   captureBtn.addEventListener('click', () => {
@@ -2580,30 +2701,6 @@
     // same collage instead of only the person who tapped.
     if (partyMode) sendPartyMsg({ type: 'capture' });
     runCaptureSequence();
-  });
-
-  resetBtn.addEventListener('click', () => {
-    if (busy) return;
-    shots = [];
-    shotCount.textContent = '0 / ' + TOTAL_SHOTS;
-    pips.forEach(p => p.classList.remove('filled'));
-    for (let i = 0; i < TOTAL_SHOTS; i++){
-      const frame = document.getElementById('frame' + i);
-      frame.classList.add('empty');
-      frame.textContent = String(i+1).padStart(2,'0');
-    }
-    downloadBtn.disabled = true;
-
-    if (activeEffect === 4 || activeEffect === 5 || (partyMode && partyBgFrame())){
-      effectShots = [];
-      downloadEffectBtn.disabled = true;
-      shotCount.textContent = '0 / 1';
-      const frame0 = document.getElementById('efc0');
-      frame0.classList.add('empty');
-      frame0.innerHTML = '01';
-    }
-    // A pose-based effect id (1/2/3) is unreachable — EFFECT_ITEMS never
-    // lists one — so no further branch is needed here.
   });
 
   /* ============================================================
@@ -2616,9 +2713,6 @@
     if (isHidden) partyControls.removeAttribute('hidden');
     else partyControls.setAttribute('hidden', '');
   });
-
-  // Preloaded copies of the same images the reel shows, for compositing.
-  const bgImages = PARTY_BACKGROUNDS.map(bg => { const im = new Image(); im.src = bg.src; return im; });
 
   function updateBgUIFromRemote(index){
     selectBgIndex(index, false);   // no rebroadcast: that would ping-pong
@@ -2636,6 +2730,9 @@
 
   let partyFrameLayout = null;
   function applyPartyBgLayout(){
+    // Never mid-sequence: the run finishes in the layout it started in, and
+    // runCaptureSequence() re-applies this once it ends.
+    if (busy){ partyLayoutPending = true; return; }
     // Effects own the viewfinder while one is active; null forces a re-apply
     // as soon as the user drops back to the plain booth.
     if (activeEffect > 0){ partyFrameLayout = null; return; }
@@ -2646,28 +2743,11 @@
     if (wantFrame){
       const im = bgImages[selectedBgIndex];
       const bw = (im && im.naturalWidth) || 700, bh = (im && im.naturalHeight) || 1044;
-      setFrameAspect(bw, bh);
-      document.documentElement.style.setProperty('--single-frame-aspect', bw + ' / ' + bh);
-      normalStripWrap.hidden = true;
-      effectStripWrap.hidden = false;
-      effectStrip.classList.add('single-frame');
-      effectStripLabel.textContent = (PARTY_BACKGROUNDS[selectedBgIndex].label || 'Party') + ' frame shot';
-      const f0 = document.getElementById('efc0');
-      f0.classList.add('empty');
-      f0.innerHTML = '01';
-      effectShots = [];
-      downloadEffectBtn.disabled = true;
-      setShutterLabel('Take photo (1 shot)');
-      pipsRow.hidden = true;
-      shotCount.textContent = '0 / 1';
+      showSingleFrameStrip((PARTY_BACKGROUNDS[selectedBgIndex].label || 'Party') + ' frame shot', bw, bh);
     } else {
-      applyBaseAspect();
-      normalStripWrap.hidden = false;
-      effectStripWrap.hidden = true;
-      effectStrip.classList.remove('single-frame');
-      setShutterLabel('Take strip (4 shots)');
-      pipsRow.hidden = false;
-      shotCount.textContent = shots.length + ' / ' + TOTAL_SHOTS;
+      showFourFrameStrip();
+      // A framed party shot is abandoned along with the poster layout.
+      resetEffectFrame();
     }
   }
 
@@ -2726,8 +2806,10 @@
     }
     /* Results arriving but the mask claiming almost the whole frame is a
        different failure from no results at all, and it looks identical on
-       screen. Name it rather than leaving it looking like a dead button. */
-    if (maskCoverage > 0.97){
+       screen. Name it rather than leaving it looking like a dead button.
+       Read for this device's own camera: in a party the friend's feed is
+       segmented here too, and its coverage says nothing about your lighting. */
+    if (maskCoverageBy[activeEffect > 0 ? 'effect' : 'local'] > 0.97){
       segStatus.hidden = false;
       segStatus.textContent = 'The cutout is running but not separating you from the background — try better, more even lighting behind you.';
       return;
@@ -2758,14 +2840,21 @@
   // Everything arriving over the data channel lands here, on both host and joiner.
   function handlePartyData(d){
     if (!d || !d.type) return;
-    if (d.type === 'bg') updateBgUIFromRemote(d.index);
+    if (d.type === 'bg'){
+      // Whatever the other side sends is untrusted: only a real backdrop
+      // index may become selectedBgIndex (a string "1" would have stuck and
+      // broken every === comparison against it).
+      if (!Number.isInteger(d.index) || !PARTY_BACKGROUNDS[d.index]) return;
+      if (busy){ pendingRemoteBg = d.index; return; }
+      updateBgUIFromRemote(d.index);
+    }
     else if (d.type === 'capture') runCaptureSequence();   // no rebroadcast: avoids a loop
   }
 
   function drawPartyBackdrop(ctx, w, h){
     const im = bgImages[selectedBgIndex];
     if (im && im.complete && im.naturalWidth){
-      drawCoverImageEl(ctx, im, 0, 0, w, h);
+      drawCoverImage(ctx, im, 0, 0, w, h, false);
     } else {
       const g = ctx.createLinearGradient(0, 0, w, h);
       g.addColorStop(0, '#2b0f14'); g.addColorStop(0.5, '#3c1a2a'); g.addColorStop(1, '#1a0e2e');
@@ -2774,9 +2863,15 @@
     }
   }
 
+  /* Crop-to-fill for every source the page draws: <video>, <canvas> and
+     <img>. There used to be three copies of this (drawCoverImageEl and
+     drawCoverFrame did the same crop for images). naturalWidth comes before
+     width so an image attached to the DOM is measured by its pixels, not by
+     its laid-out size. */
   function drawCoverImage(ctx, source, dx, dy, dw, dh, mirror, srcW, srcH){
-    const sw = srcW || source.videoWidth || source.width;
-    const sh = srcH || source.videoHeight || source.height;
+    if (!source) return;
+    const sw = srcW || source.videoWidth || source.naturalWidth || source.width;
+    const sh = srcH || source.videoHeight || source.naturalHeight || source.height;
     if (!sw || !sh) return;
     const ir = sw / sh, dr = dw / dh;
     let cropW, cropH, cropX, cropY;
@@ -2922,16 +3017,17 @@
   });
 
 
-  // Places a person at a natural, un-stretched scale, bottom-anchored, centered
-  // around a given fraction of the canvas width — so two people share one
-  // continuous frame instead of being forced into a hard-split half each.
-  /* Same idea as drawPersonNatural but confined to a sub-rectangle — used to
-     stand both people inside a poster's photo box. */
-  function drawPersonInRect(ctx, source, centerXFrac, rx, ry, rw, rh, mirror, srcW, srcH){
-    const sw = srcW || source.videoWidth || source.width;
-    const sh = srcH || source.videoHeight || source.height;
+  /* Places a person at a natural, un-stretched scale, bottom-anchored and
+     centred on a fraction of the rect's width — so two people share one
+     continuous frame instead of being forced into a hard-split half each.
+     The rect is the whole scene for an open backdrop (stood at 94% of its
+     height) or a poster's photo box (98%). This was two copies of the same
+     function, one per case. */
+  function drawPersonInRect(ctx, source, centerXFrac, rx, ry, rw, rh, mirror, heightFrac){
+    const sw = source.videoWidth || source.width;
+    const sh = source.videoHeight || source.height;
     if (!sw || !sh) return;
-    const targetH = rh * 0.98;
+    const targetH = rh * (heightFrac || 0.98);
     const scale = targetH / sh;
     const targetW = sw * scale;
     const dx = rx + rw * centerXFrac - targetW / 2;
@@ -2976,22 +3072,6 @@
     ctx.restore();
   }
 
-  function drawPersonNatural(ctx, source, centerXFrac, w, h, mirror, srcW, srcH){
-    const sw = srcW || source.videoWidth || source.width;
-    const sh = srcH || source.videoHeight || source.height;
-    if (!sw || !sh) return;
-    const targetH = h * 0.94;
-    const scale = targetH / sh;
-    const targetW = sw * scale;
-    const cx = w * centerXFrac;
-    const dx = cx - targetW / 2;
-    const dy = h - targetH;
-    ctx.save();
-    if (mirror) { ctx.translate(dx + targetW, dy); ctx.scale(-1, 1); ctx.drawImage(source, 0, 0, targetW, targetH); }
-    else { ctx.drawImage(source, dx, dy, targetW, targetH); }
-    ctx.restore();
-  }
-
   /* -------- remote feed playback --------
      A MediaStream in a <video> is not guaranteed to start on its own: autoplay
      rules, backgrounded tabs and (previously) being outside the render tree can
@@ -3001,9 +3081,52 @@
   let remoteWatchdog = null;
   /* Six ticks of the 800ms watchdog, so about five seconds of no new frames.
      Long enough to ride out a blip on mobile data, short enough that nobody
-     sits looking at a frozen friend wondering whether it is their own phone. */
+     sits looking at a frozen friend wondering whether it is their own phone.
+
+     That used to end the party outright. But a phone stops sending video the
+     moment its owner switches apps — to paste the room link into a chat, say
+     — so a ten-second detour ended the party for both people. Now a stall
+     with the data channel still open is reported as a pause and the party
+     waits; it ends at the stall mark only when the data channel has closed
+     too (a shut tab closes both at once), or after REMOTE_GONE_TICKS
+     (about 45 seconds) if the channel never says anything at all. */
   const REMOTE_STALL_TICKS = 6;
+  const REMOTE_GONE_TICKS = 56;
   let lastRemoteTime = -1, remoteStallTicks = 0;
+  let remotePausedShown = false;
+
+  function showRemotePaused(paused){
+    if (paused === remotePausedShown) return;
+    remotePausedShown = paused;
+    const el = partyStatusEl();
+    if (paused){
+      el.textContent = 'Your friend’s video has paused — waiting for them to come back…';
+      el.classList.remove('ok');
+    } else {
+      el.textContent = 'Connected! Blending both cameras...';
+      el.classList.add('ok');
+    }
+  }
+
+  // One watchdog tick: is the friend's video still moving, paused, or gone?
+  function checkRemoteStall(){
+    if (!partyMode) return;
+    const t = remoteVideo.currentTime;
+    if (t !== lastRemoteTime){
+      lastRemoteTime = t;
+      remoteStallTicks = 0;
+      showRemotePaused(false);
+      return;
+    }
+    remoteStallTicks++;
+    if (remoteStallTicks < REMOTE_STALL_TICKS) return;
+    const channelOpen = !!(partyConn && partyConn.open);
+    if (!channelOpen || remoteStallTicks >= REMOTE_GONE_TICKS){
+      exitPartyMode('Your friend left the party.');
+      return;
+    }
+    showRemotePaused(true);
+  }
 
   function remoteFrameReady(){
     return remoteVideo.readyState >= 2 && remoteVideo.videoWidth > 0 && !remoteVideo.paused;
@@ -3057,7 +3180,7 @@
     });
 
     if (remoteWatchdog) clearInterval(remoteWatchdog);
-    lastRemoteTime = -1; remoteStallTicks = 0;
+    lastRemoteTime = -1; remoteStallTicks = 0; remotePausedShown = false;
     remoteWatchdog = setInterval(() => {
       if (!remoteVideo.srcObject) return;
       if (!remoteFrameReady()){
@@ -3070,11 +3193,17 @@
          frame it ever received, which is the "their camera just froze"
          report. currentTime is the one signal that holds in every one of
          those cases: frames stop arriving, so it stops advancing. */
-      if (!partyMode) return;
-      const t = remoteVideo.currentTime;
-      if (t !== lastRemoteTime){ lastRemoteTime = t; remoteStallTicks = 0; return; }
-      if (++remoteStallTicks >= REMOTE_STALL_TICKS) exitPartyMode('Your friend left the party.');
+      checkRemoteStall();
     }, 800);
+  }
+
+  function detachRemoteStream(){
+    if (remoteWatchdog){ clearInterval(remoteWatchdog); remoteWatchdog = null; }
+    remoteVideo.onloadedmetadata = null;
+    remoteVideo.onpause = null;
+    remoteVideo.srcObject = null;
+    remoteCutAt = 0;
+    lastRemoteTime = -1; remoteStallTicks = 0; remotePausedShown = false;
   }
 
   /* 'disconnected' is deliberately not treated as the end: ICE reports it for
@@ -3198,8 +3327,9 @@
 
   const maskCanvas = document.createElement('canvas');
   const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
-  let maskCoverage = 1;      // fraction of the frame the mask claims is person
-  let maskNormalised = false;
+  // Fraction of the frame the mask claims is person, per source — the local
+  // camera, the friend's feed and the effects loop each report their own.
+  const maskCoverageBy = { local: 1, remote: 1, effect: 1 };
   let maskRaw = null;        // per-pixel mask value before hardening, reused
 
   /* ---- temporal smoothing ----
@@ -3283,7 +3413,7 @@
 
     let img;
     try { img = maskCtx.getImageData(0, 0, w, h); }
-    catch (e) { maskNormalised = false; return null; }   // tainted: use it as-is
+    catch (e) { return null; }   // tainted: use it as-is
 
     const p = img.data;
     const n = p.length >> 2;
@@ -3361,8 +3491,7 @@
     if (sum < 0) sum = 0;
 
     maskCtx.putImageData(img, 0, 0);
-    maskCoverage = sum / denom;
-    maskNormalised = true;
+    maskCoverageBy[key || 'local'] = sum / denom;
     return maskCanvas;
   }
 
@@ -3476,13 +3605,14 @@
     if (!seg || !source) return;
     segBusy = true;
     segTarget = handler;
+    let timeout = null;
     try {
       /* A send() that never settles used to leave segBusy stuck true, which
          silently killed every cutout on the page for the rest of the session —
          the effect just showed the raw camera and never said why. */
       await Promise.race([
         seg.send({ image: source }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('segmentation timed out')), SEG_TIMEOUT_MS))
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('segmentation timed out')), SEG_TIMEOUT_MS); })
       ]);
       segStalls = 0;
     } catch (e) {
@@ -3497,6 +3627,9 @@
       if (sharedSeg === seg) sharedSeg = null;
       if (++segStalls >= 2){ segFailed = true; segFailedAt = performance.now(); }
     }
+    // Every call armed an 8s timer and none were cleared, so a hundred or so
+    // dead timers were always pending behind a running cutout.
+    clearTimeout(timeout);
     segTarget = null;
     segBusy = false;
   }
@@ -3565,10 +3698,10 @@
         if (partyCanvas.width !== w || partyCanvas.height !== h) { partyCanvas.width = w; partyCanvas.height = h; }
         drawPartyBackdrop(ctx, w, h);
 
-        if (aiCutout && localCutFresh()) drawPersonNatural(ctx, localCutoutCanvas, 0.32, w, h, false);
+        if (aiCutout && localCutFresh()) drawPersonInRect(ctx, localCutoutCanvas, 0.32, 0, 0, w, h, false, 0.94);
         else if (video.readyState >= 2 && video.videoWidth) drawPersonPanel(ctx, video, 0.32, 0, 0, w, h, mirrorPreview);
 
-        if (aiCutout && remoteCutFresh()) drawPersonNatural(ctx, remoteCutoutCanvas, 0.68, w, h, false);
+        if (aiCutout && remoteCutFresh()) drawPersonInRect(ctx, remoteCutoutCanvas, 0.68, 0, 0, w, h, false, 0.94);
         else if (remoteFrameReady()) drawPersonPanel(ctx, remoteVideo, 0.68, 0, 0, w, h, false);
       }
     }
@@ -3585,10 +3718,17 @@
   function enterPartyMode(role){
     if (role) partyRole = role;
     if (partyMode) return;   // both peers can fire this more than once
+    /* A friend can connect while this device is mid-sequence. Switching then
+       would drop the effect being shot and hand the rest of the strip to the
+       party canvas, so the switch waits for the sequence to finish. */
+    if (busy){ pendingPartyRole = partyRole || 'host'; return; }
     partyMode = true;
     if (activeEffect > 0) setEffect(0);   // effects are local-camera only
     effectNote.hidden = currentMode !== 'effects';
     leavePartyBtn.hidden = false;
+    // One peer at a time: no new room or join while this party runs.
+    createQrBtn.disabled = true;
+    joinBtn.disabled = true;
     video.classList.add('cam-hidden');
     partyCanvas.style.display = 'block';
     partyBadge.classList.add('show');
@@ -3609,29 +3749,29 @@
     /* A call that never connected must not tear down a room the host just
        opened — report it and leave the room standing. */
     if (!partyMode){
+      // A call that connected while a capture was running never got to
+      // enter the party; drop that deferred entry and the feed it attached.
+      if (pendingPartyRole){ pendingPartyRole = null; detachRemoteStream(); }
       if (message) partyStatusEl().textContent = message;
       return;
     }
     leavingParty = true;
     const el = partyStatusEl();
     partyMode = false;
+    // A party shot still counting down would capture a frozen party canvas.
+    if (captureRun && captureRun.source === 'party') captureRun.aborted = true;
     partyCanvas.style.display = 'none';
     partyBadge.classList.remove('show');
     if (activeEffect === 0) video.classList.remove('cam-hidden');
     effectNote.hidden = true;
     leavePartyBtn.hidden = true;
 
-    if (remoteWatchdog){ clearInterval(remoteWatchdog); remoteWatchdog = null; }
-    remoteVideo.onloadedmetadata = null;
-    remoteVideo.onpause = null;
-    remoteVideo.srcObject = null;
-    remoteCutAt = 0;
-    lastRemoteTime = -1; remoteStallTicks = 0;
+    detachRemoteStream();
+    pendingRemoteBg = null;
 
     try { if (mediaCall) mediaCall.close(); } catch (e) {}
     try { if (partyConn) partyConn.close(); } catch (e) {}
-    try { if (peer) peer.destroy(); } catch (e) {}
-    mediaCall = null; partyConn = null; peer = null;
+    resetPeer();
 
     el.classList.remove('ok');
     if (message) el.textContent = message;
@@ -3639,6 +3779,7 @@
 
     createQrBtn.disabled = false;
     joinBtn.disabled = false;
+    joinBtn.textContent = 'Connect';     // checkAutoJoin's "Join <code>" outlived the party
     qrHostFrame.classList.remove('show');
     applyPartyBgLayout();
     leavingParty = false;
@@ -3650,12 +3791,105 @@
   });
 
   /* PeerJS's default config only ships one STUN server. A couple more makes
-     candidate gathering noticeably more reliable on mobile data. */
+     candidate gathering noticeably more reliable on mobile data.
+
+     STUN alone cannot connect two devices when either sits behind a
+     symmetric or carrier-grade NAT (common on mobile data and office Wi-Fi):
+     the party just says "waiting for video" forever. That needs a TURN relay,
+     which needs an account and credentials, so none ships here. Add yours to
+     TURN_SERVERS, e.g.
+       { urls: 'turn:turn.example.com:3478', username: '…', credential: '…' }
+     Anything placed here is visible to every visitor, so use short-lived or
+     domain-restricted credentials. */
+  const TURN_SERVERS = [];
   const PEER_OPTS = { config: { iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:global.stun.twilio.com:3478' }
+    { urls: 'stun:global.stun.twilio.com:3478' },
+    ...TURN_SERVERS
   ] } };
+
+  /* ---- one PeerJS peer at a time ----
+     Create a room and Connect each built a new Peer into the same `peer`
+     variable, so a host who then pressed Connect (or a guest who pressed
+     Create) orphaned a live peer that kept answering calls with the camera,
+     and a failed attempt left its broker connection open on every retry.
+     Every new peer now goes through resetPeer() first, and every handler
+     checks it still belongs to the current one. */
+  let partyPeerId = null;   // the one remote peer this room has accepted
+
+  function resetPeer(){
+    const p = peer;
+    peer = null;
+    mediaCall = null;
+    partyConn = null;
+    partyPeerId = null;
+    if (p){ try { p.destroy(); } catch (e) { /* already gone */ } }
+  }
+
+  // A room takes one guest. The first caller's id is the only one let in.
+  function acceptPartyPeer(id){
+    if (partyPeerId && partyPeerId !== id) return false;
+    partyPeerId = id;
+    return true;
+  }
+
+  function reconnectPeer(p){
+    if (p === peer && !p.destroyed){ try { p.reconnect(); } catch (e) { /* broker still down */ } }
+  }
+
+  /* Errors after which PeerJS's broker connection is gone for good; anything
+     else (a single failed call, an unreachable peer) leaves the peer usable. */
+  const PEER_FATAL_ERRORS = ['browser-incompatible', 'invalid-id', 'invalid-key', 'network',
+    'ssl-unavailable', 'server-error', 'socket-error', 'socket-closed', 'unavailable-id'];
+
+  function onHostCall(p, call){
+    /* The room code is the only thing between a stranger and this camera.
+       Every caller used to be answered, and a second one — someone else
+       holding the link — replaced the friend, received the live feed, and
+       ended the real party when the first call's 'close' fired. */
+    if (p !== peer || (mediaCall && mediaCall !== call) || !acceptPartyPeer(call.peer)){
+      try { call.close(); } catch (e) { /* never opened */ }
+      return;
+    }
+    /* The host's call object was never stored, so openCamera()'s
+       replaceTrack() found nothing to hand the new track to and the
+       friend's view of the host froze the moment the host switched
+       between front, back or 0.5x. */
+    mediaCall = call;
+    call.answer(stream);
+    call.on('stream', remoteStream => {
+      if (call !== mediaCall) return;
+      attachRemoteStream(remoteStream);
+      holdSenderResolution(call);
+      watchCallTeardown(call);
+      qrHostStatus.textContent = 'Connected! Blending both cameras...';
+      qrHostStatus.classList.add('ok');
+      enterPartyMode('host');
+    });
+    const dropped = (message) => {
+      // A call that dies before the party starts frees the room for a retry.
+      if (!partyMode && mediaCall === call){
+        mediaCall = null;
+        if (partyConn && partyConn.peer === call.peer){ try { partyConn.close(); } catch (e) {} partyConn = null; }
+        partyPeerId = null;
+      }
+      exitPartyMode(message);
+    };
+    call.on('close', () => dropped('Your friend left the party.'));
+    call.on('error', () => dropped('The connection dropped.'));
+  }
+
+  function onHostConnection(p, conn){
+    if (p !== peer || (partyConn && partyConn !== conn) || !acceptPartyPeer(conn.peer)){
+      try { conn.close(); } catch (e) { /* never opened */ }
+      return;
+    }
+    partyConn = conn;
+    conn.on('open', () => syncBgOnConnect(true));
+    conn.on('data', handlePartyData);
+    conn.on('close', () => { if (partyConn === conn) partyConn = null; });
+  }
 
   /* navigator.share() only accepts http(s) URLs. Handing it a file:// one does
      NOT throw — Chrome's browser process rejects the IPC and kills the whole
@@ -3759,6 +3993,7 @@
   });
 
   createQrBtn.addEventListener('click', async () => {
+    if (partyMode) return;
     if (!window.Peer) {
       qrHostStatus.textContent = 'Connection library failed to load — check your internet connection.';
       return;
@@ -3776,53 +4011,63 @@
     try { await ensureCamera(); } catch(e) { qrHostStatus.textContent = 'Camera permission is needed to start a party.'; createQrBtn.disabled = false; return; }
 
     qrHostStatus.textContent = 'Creating your room...';
+    if (partyMode) return;               // a party started while the camera was opening
+    // Hosting and joining are exclusive: a join still in flight is abandoned.
+    if (peer){
+      resetPeer();
+      joinStatus.textContent = '';
+      joinStatus.classList.remove('ok');
+      joinBtn.disabled = false;
+    }
 
     function tryCreate(attemptsLeft){
-      const code = makeShortCode();
-      peer = new Peer(code, PEER_OPTS);
-      peer.on('open', id => {
+      const p = new Peer(makeShortCode(), PEER_OPTS);
+      peer = p;
+      p.on('open', id => {
+        if (p !== peer) return;
         showHostId(id);
         qrHostStatus.textContent = 'Room is open. Send the link and wait here.';
       });
-      peer.on('call', call => {
-        /* The host's call object was never stored, so openCamera()'s
-           replaceTrack() found nothing to hand the new track to and the
-           friend's view of the host froze the moment the host switched
-           between front, back or 0.5x. */
-        mediaCall = call;
-        call.answer(stream);
-        call.on('stream', remoteStream => {
-          attachRemoteStream(remoteStream);
-          holdSenderResolution(call);
-          watchCallTeardown(call);
-          qrHostStatus.textContent = 'Connected! Blending both cameras...';
-          qrHostStatus.classList.add('ok');
-          enterPartyMode('host');
-        });
-        call.on('close', () => exitPartyMode('Your friend left the party.'));
-        call.on('error', () => exitPartyMode('The connection dropped.'));
-      });
-      peer.on('connection', conn => {
-        partyConn = conn;
-        conn.on('open', () => syncBgOnConnect(true));
-        conn.on('data', handlePartyData);
-        conn.on('close', () => { partyConn = null; });
-      });
-      peer.on('disconnected', () => { try { peer.reconnect(); } catch(e){} });
-      peer.on('error', err => {
-        if (err && err.type === 'unavailable-id' && attemptsLeft > 0) {
-          peer.destroy();
+      p.on('call', call => onHostCall(p, call));
+      p.on('connection', conn => onHostConnection(p, conn));
+      p.on('disconnected', () => reconnectPeer(p));
+      p.on('error', err => {
+        if (p !== peer) return;
+        const type = err && err.type ? err.type : 'unknown';
+        if (type === 'unavailable-id' && attemptsLeft > 0) {
+          resetPeer();
           tryCreate(attemptsLeft - 1);
           return;
         }
-        qrHostStatus.textContent = 'Connection error: ' + (err && err.type ? err.type : 'unknown') + '. Try again.';
+        // The call itself is peer-to-peer; losing the broker doesn't end it.
+        if (partyMode) return;
+        if (PEER_FATAL_ERRORS.indexOf(type) === -1){
+          qrHostStatus.textContent = 'A connection attempt failed (' + type + '). The room is still open — ask your friend to try the link again.';
+          return;
+        }
+        resetPeer();
+        qrHostFrame.classList.remove('show');
+        qrHostStatus.textContent = 'Connection error: ' + type + '. Try again.';
         createQrBtn.disabled = false;
       });
     }
     tryCreate(3);
   });
 
+  /* A guest who has made it in no longer needs ?connect= in the address bar.
+     Left there, a reload after the party re-armed the join prompt for a room
+     that no longer exists. */
+  function forgetRoomLink(){
+    try {
+      const u = new URL(location.href);
+      if (!u.searchParams.has('connect')) return;
+      u.searchParams.delete('connect');
+      history.replaceState(history.state, '', u.toString());
+    } catch (e) { /* opened from somewhere replaceState can't touch */ }
+  }
+
   async function joinParty(rawCode){
+    if (partyMode) return;
     if (!window.Peer) { joinStatus.textContent = 'Connection library failed to load — check your internet connection.'; return; }
     const hostId = extractHostId(rawCode);
     if (!hostId) { joinStatus.textContent = 'Enter or scan a code first.'; return; }
@@ -3830,31 +4075,76 @@
     joinBtn.disabled = true;
     joinStatus.textContent = 'Starting your camera...';
     try { await ensureCamera(); } catch(e) { joinStatus.textContent = 'Camera permission is needed to join a party.'; joinBtn.disabled = false; return; }
+    if (partyMode) return;               // a party started while the camera was opening
+
+    // Hosting and joining are exclusive: joining closes a room you had open.
+    if (peer){
+      resetPeer();
+      qrHostFrame.classList.remove('show');
+      qrHostStatus.textContent = '';
+      qrHostStatus.classList.remove('ok', 'err');
+      createQrBtn.disabled = false;
+    }
+
+    const failJoin = (message) => {
+      resetPeer();
+      joinStatus.textContent = message;
+      joinStatus.classList.remove('ok');
+      joinBtn.disabled = false;
+    };
 
     joinStatus.textContent = 'Connecting to your friend...';
-    peer = new Peer(PEER_OPTS);
-    peer.on('open', () => {
-      mediaCall = peer.call(hostId, stream);
-      mediaCall.on('stream', remoteStream => {
+    const p = new Peer(PEER_OPTS);
+    peer = p;
+    let dialled = false;
+    p.on('open', () => {
+      /* 'open' fires again every time reconnectPeer() gets the broker back.
+         Dialling on each one placed a second call and data channel to the
+         host and orphaned the first, so only the first 'open' dials. */
+      if (p !== peer || dialled) return;
+      dialled = true;
+      const call = p.call(hostId, stream);
+      mediaCall = call;
+      call.on('stream', remoteStream => {
+        if (call !== mediaCall) return;
         attachRemoteStream(remoteStream);
-        holdSenderResolution(mediaCall);
-        watchCallTeardown(mediaCall);
+        holdSenderResolution(call);
+        watchCallTeardown(call);
         joinStatus.textContent = 'Connected! Blending both cameras...';
         joinStatus.classList.add('ok');
+        forgetRoomLink();
         enterPartyMode('guest');
       });
-      mediaCall.on('error', () => { joinStatus.textContent = "Couldn't reach that room. Double-check the code."; joinBtn.disabled = false; });
-      mediaCall.on('close', () => exitPartyMode('Your friend left the party.'));
+      call.on('error', () => {
+        // Mid-party, ICE teardown (watchCallTeardown) decides whether it's over.
+        if (call !== mediaCall || partyMode) return;
+        failJoin("Couldn't reach that room. Double-check the code.");
+      });
+      call.on('close', () => {
+        if (call === mediaCall && !partyMode){
+          // Never made it into the party (or was still waiting on a capture
+          // to finish): free the join button rather than leave it dead.
+          const hadConnected = !!pendingPartyRole;
+          exitPartyMode();
+          failJoin(hadConnected ? 'Your friend left the party.'
+                                : "Couldn't connect to that room — it may be closed or already full.");
+          return;
+        }
+        exitPartyMode('Your friend left the party.');
+      });
 
-      partyConn = peer.connect(hostId);
-      partyConn.on('open', () => syncBgOnConnect(false));   // adopt the host's
-      partyConn.on('data', handlePartyData);
-      partyConn.on('close', () => { partyConn = null; });
+      const conn = p.connect(hostId);
+      partyConn = conn;
+      conn.on('open', () => syncBgOnConnect(false));   // adopt the host's
+      conn.on('data', handlePartyData);
+      conn.on('close', () => { if (partyConn === conn) partyConn = null; });
     });
-    peer.on('disconnected', () => { try { peer.reconnect(); } catch(e){} });
-    peer.on('error', err => {
-      joinStatus.textContent = 'Connection error: ' + (err && err.type ? err.type : 'unknown') + '. Try again.';
-      joinBtn.disabled = false;
+    p.on('disconnected', () => reconnectPeer(p));
+    p.on('error', err => {
+      if (p !== peer) return;
+      // The call itself is peer-to-peer; losing the broker doesn't end it.
+      if (partyMode) return;
+      failJoin('Connection error: ' + (err && err.type ? err.type : 'unknown') + '. Try again.');
     });
   }
 
@@ -3864,7 +4154,7 @@
      opens the party tab and this immediately closes it again. */
   setMode('filters');
   closeRail();   // no category is open until a tab is tapped
-  setShutterLabel('Take strip (4 shots)');
+  setShutterLabel(SHUTTER_STRIP_LABEL);
 
   /* Arriving on a room link opens the panel, fills the code in and puts the
      join button under your thumb — but does not call getUserMedia by itself.
@@ -3979,22 +4269,6 @@
     });
   }
 
-  // Crop to fill instead of stretching to fit. Without this a portrait
-  // sensor gets squashed into a landscape frame and everyone looks wide.
-  function drawCoverFrame(ctx, img, dx, dy, dw, dh){
-    const srcRatio = img.naturalWidth / img.naturalHeight;
-    const dstRatio = dw / dh;
-    let sw, sh, sx, sy;
-    if (srcRatio > dstRatio){
-      sh = img.naturalHeight; sw = sh * dstRatio;
-      sx = (img.naturalWidth - sw) / 2; sy = 0;
-    } else {
-      sw = img.naturalWidth; sh = sw / dstRatio;
-      sx = 0; sy = (img.naturalHeight - sh) / 2;
-    }
-    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-  }
-
   // ctx.letterSpacing is Chrome-only, so track manually.
   function drawTracked(ctx, text, x, y, tracking, align){
     const chars = Array.from(text);
@@ -4017,11 +4291,6 @@
   // ignores the latter, which is a big share of an online booth's traffic.
   // iOS Safari ignores <a download> on a data URL, so route everything
   // through a blob and the share sheet where it exists.
-  async function saveDataUrl(dataUrl, filename){
-    const blob = await (await fetch(dataUrl)).blob();
-    return deliverBlob(blob, filename);
-  }
-
   async function deliverBlob(blob, filename){
     try {
       const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
@@ -4042,16 +4311,23 @@
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
-  async function saveStripCanvas(canvas, filename){
+  /* A rendered collage, ready to hand over: a JPEG blob, or — where toBlob
+     isn't available — a data URL of the same image. */
+  async function encodeCollage(canvas){
     const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', STRIP.quality));
-    if (!blob){
-      const a = document.createElement('a');
-      a.download = filename;
-      a.href = canvas.toDataURL('image/jpeg', STRIP.quality);
-      a.click();
-      return;
-    }
-    return deliverBlob(blob, filename);
+    if (blob) return { blob, dataUrl: null };
+    return { blob: null, dataUrl: canvas.toDataURL('image/jpeg', STRIP.quality) };
+  }
+
+  function saveCollage(out, filename){
+    if (out.blob) return deliverBlob(out.blob, filename);
+    // Attached before the click: Firefox ignores a download from a detached link.
+    const a = document.createElement('a');
+    a.download = filename;
+    a.href = out.dataUrl;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   // One print, drawn about its own centre so it can be tilted without
@@ -4076,7 +4352,9 @@
 
     ctx.fillStyle = POLAROID.well;
     ctx.fillRect(m, m, photoW, photoH);
-    drawCoverFrame(ctx, img, m, m, photoW, photoH);
+    // Crop to fill instead of stretching to fit. Without this a portrait
+    // sensor gets squashed into a landscape frame and everyone looks wide.
+    drawCoverImage(ctx, img, m, m, photoW, photoH, false);
 
     // Hairline, so a pale photo still reads as separate from the card.
     ctx.strokeStyle = POLAROID.edge;
@@ -4090,10 +4368,11 @@
   /* Both download buttons come through here: the four-frame strip and the
      single-shot effects. The shape of the photo well follows what the camera
      actually handed back rather than an assumed 4:3, so a poster-shaped effect
-     capture keeps its proportions instead of being cropped to fit. */
-  async function renderPolaroidCollage(urls, filename){
-    if (!urls.length) return;
+     capture keeps its proportions instead of being cropped to fit.
 
+     Each render gets its own canvas: a collage prepared in the background
+     after a capture must not share one with a download already under way. */
+  async function renderPolaroidCollage(urls){
     const imgs = await Promise.all(urls.map(loadShotImage));
     const n = imgs.length;
     const first = imgs[0];
@@ -4121,6 +4400,7 @@
     const canvasW = pad * 2 + cols * printW + gap * (cols - 1);
     const canvasH = pad * 2 + rows * printH + gap * (rows - 1) + footerH;
 
+    const exportCanvas = document.createElement('canvas');
     exportCanvas.width = canvasW;
     exportCanvas.height = canvasH;
     const ctx = exportCanvas.getContext('2d');
@@ -4172,12 +4452,36 @@
       }
     }
 
-    await saveStripCanvas(exportCanvas, filename);
+    return encodeCollage(exportCanvas);
+  }
+
+  /* Rendering a collage takes a beat — decode the shots, wait on the fonts,
+     encode a JPEG. It used to all happen after the Download tap, so
+     navigator.share() ran well after the tap that allowed it, and Safari only
+     opens the share sheet close to a tap: iOS quietly fell back to a plain
+     download. The collage is now rendered as soon as the shots exist, so the
+     tap only has to hand over a finished file. Keyed on the shot array and
+     its length — every new sequence starts a fresh array. */
+  let collagePrep = null;   // { urls, n, promise }
+
+  function prepareCollage(urls){
+    if (collagePrep && collagePrep.urls === urls && collagePrep.n === urls.length) return collagePrep.promise;
+    const promise = renderPolaroidCollage(urls);
+    const entry = { urls, n: urls.length, promise };
+    collagePrep = entry;
+    // A failed render isn't cached; the next tap tries again.
+    promise.catch(() => { if (collagePrep === entry) collagePrep = null; });
+    return promise;
+  }
+
+  async function downloadShots(urls, filename){
+    if (!urls.length) return;
+    const out = await prepareCollage(urls);
+    await saveCollage(out, filename);
   }
 
   async function downloadCollage(){
-    if (!shots.length) return;
-    await renderPolaroidCollage(shots, 'kc-snap.jpg');
+    await downloadShots(shots, 'kc-snap.jpg');
   }
 
   // Keep the on-screen preview honest about what the export will say.
