@@ -1,8 +1,21 @@
 # KC Snap
 
 An online photo booth in a single HTML page. Shoot a four-frame strip from a
-phone or laptop, add a filter or an effect (Starfield, UAE Frame, Photobooth
-B&W), or connect a second device for party mode and appear in one shared frame.
+phone or laptop, add a filter or an effect, or connect a second device for party
+mode and appear in one shared frame.
+
+Effects, all drawn in code (no image files):
+
+- **Photobooth B&W**: you, toned and pinned to a corkboard; one framed photo.
+- **Flipbook**: a vintage photobooth flipbook with you on its top page. It
+  sits still until the shutter is pressed; then the 10-second countdown, the
+  page flipping and the video recording all start at once, and at zero the
+  book settles and the video is ready (MP4 or WebM, depending on the browser;
+  a still of the book where video recording isn't available).
+- **Subway Door**: you, as a see-through reflection in the windows of a train
+  door, with the empty carriage visible behind the glass; one framed photo.
+
+Flipbook and Subway Door are also party backdrops, alongside Paper.
 
 Everything runs in the browser: solo photos never leave the device, and party
 mode connects the two cameras directly (WebRTC through the public PeerJS broker).
@@ -20,7 +33,7 @@ python -m http.server 8000
 then open <http://localhost:8000/>.
 
 It needs an internet connection: PeerJS (party mode) and MediaPipe (the AI
-cutout behind Starfield, UAE Frame and party mode) load from jsdelivr.
+cutout, used by party mode and Subway Door) load from jsdelivr.
 
 ## Party mode across networks
 

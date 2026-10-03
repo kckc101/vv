@@ -44,7 +44,8 @@ export default [
         requestAnimationFrame: 'readonly',
         setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly',
-        Image: 'readonly', File: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+        Image: 'readonly', File: 'readonly', Blob: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+        MediaRecorder: 'readonly',        // the Flipbook video
         Peer: 'readonly',                 // PeerJS, from jsdelivr
         SelfieSegmentation: 'readonly',   // MediaPipe, from jsdelivr
       },

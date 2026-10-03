@@ -4,6 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { resolveObjectURL } from 'node:buffer';
 import { loadBooth, extractParts, busyCameraError } from './harness.mjs';
 
 /* ---------------- helpers ---------------- */
@@ -34,6 +35,19 @@ async function startJoin(kc, code = 'ABCDEFGH'){
   await kc.clock.advance(10);
   await pending;
   return kc.env.peers.at(-1);
+}
+
+// Index of a party backdrop by id.
+function backdrop(kc, id){
+  const i = kc.eval('PARTY_BACKGROUNDS.findIndex(b => b.id === ' + JSON.stringify(id) + ')');
+  assert.ok(i >= 0, 'backdrop ' + id + ' exists');
+  return i;
+}
+
+// The strip column is showing one big print (as opposed to the four-frame strip).
+function singlePrint(kc){
+  return !kc.$('effectStripWrap').hidden && kc.$('normalStripWrap').hidden
+    && kc.$('effectStrip').classList.contains('single-frame');
 }
 
 // The stylesheet's declarations, without its (many) comments.
@@ -131,30 +145,32 @@ test('C6: hue-rotate accepts turn, rad and grad as well as deg', async () => {
 
 test('B3: a backdrop change from the friend waits until the running capture ends', async () => {
   const kc = await loadBooth();
+  const subway = backdrop(kc, 'bg_subway');            // a single-shot scene: the layout would flip
   await kc.startCamera();
   kc.eval('partyMode = true');
   const run = kc.eval('runCaptureSequence()');
   await kc.clock.advance(500);
   assert.equal(kc.eval('busy'), true);
-  kc.eval('handlePartyData')({ type: 'bg', index: 1 });    // the UAE poster, which has a photo box
+  kc.eval('handlePartyData')({ type: 'bg', index: subway });
   assert.equal(kc.eval('selectedBgIndex'), 0, 'not applied mid-sequence');
   assert.equal(kc.$('effectStripWrap').hidden, true, 'layout did not flip mid-sequence');
   await kc.clock.advance(30000);
   await run;
   assert.equal(kc.eval('shots.length'), kc.eval('TOTAL_SHOTS'), 'the strip was shot in full');
-  assert.equal(kc.eval('selectedBgIndex'), 1, 'applied once the sequence ended');
-  assert.equal(kc.$('effectStripWrap').hidden, false);
+  assert.equal(kc.eval('selectedBgIndex'), subway, 'applied once the sequence ended');
+  assert.ok(singlePrint(kc), 'and the layout followed it');
 });
 
 test('B3: malformed backdrop indexes from the other device are ignored', async () => {
   const kc = await loadBooth();
   const handle = kc.eval('handlePartyData');
-  for (const index of ['1', 1.5, -1, 99, '__proto__', 'length', null, undefined]){
+  const count = kc.eval('PARTY_BACKGROUNDS.length');
+  for (const index of ['1', 1.5, -1, count, 99, '__proto__', 'length', null, undefined]){
     handle({ type: 'bg', index });
     assert.equal(kc.eval('selectedBgIndex'), 0, `index ${String(index)} was accepted`);
   }
-  handle({ type: 'bg', index: 2 });
-  assert.equal(kc.eval('selectedBgIndex'), 2);
+  handle({ type: 'bg', index: count - 1 });
+  assert.equal(kc.eval('selectedBgIndex'), count - 1);
 });
 
 /* ---------------- B4: one guest per room ---------------- */
@@ -397,19 +413,19 @@ test('B11: Download is disabled while a new strip is being shot', async () => {
 
 /* ---------------- B12: party changes mid-capture ---------------- */
 
-test('B12: a friend leaving mid-shot aborts the party capture cleanly', async () => {
+test('B12: a friend leaving mid-strip aborts the party capture cleanly', async () => {
   const kc = await loadBooth();
   await startHostParty(kc);
-  kc.eval('selectBgIndex(1, true)');                // the poster with a photo box: one framed shot
-  assert.equal(kc.$('effectStripWrap').hidden, false);
   kc.$('macShutter').click();
-  await kc.clock.advance(1500);
+  await kc.clock.advance(5500);                     // one party shot in, the second counting down
+  assert.equal(kc.eval('shots.length'), 1);
   kc.eval("exitPartyMode('Your friend left the party.')");
   await kc.clock.advance(3000);
   assert.equal(kc.eval('busy'), false);
-  assert.equal(kc.eval('effectShots.length'), 0, 'no frozen party frame captured');
-  assert.equal(kc.$('effectStripWrap').hidden, true, 'back on the ordinary strip');
+  assert.equal(kc.eval('shots.length'), 1, 'no frozen party frames shot after the friend left');
+  assert.equal(kc.$('downloadBtn').disabled, true, 'a partial strip is not offered for download');
   assert.equal(kc.$('normalStripWrap').hidden, false);
+  assert.equal(kc.$('video').classList.contains('cam-hidden'), false, 'back on the plain camera');
 });
 
 test('B12: a friend connecting mid-strip waits for the strip to finish', async () => {
@@ -432,12 +448,11 @@ test('B12: a friend connecting mid-strip waits for the strip to finish', async (
 /* ---------------- B13: effect canvas size ---------------- */
 
 test('B13: the Photobooth canvas resizes when only its height is off', async () => {
-  const kc = await loadBooth({ camera: { w: 720, h: 1280 } });   // desktop, portrait webcam
+  const kc = await loadBooth();
   await kc.startCamera();
   const ec = kc.$('effectCanvas');
-  kc.eval('setEffect(6)');
-  await kc.clock.frame(2);
-  assert.deepEqual([ec.width, ec.height], [720, 1280]);
+  ec.width = 720;                                   // right width, wrong height
+  ec.height = 1280;
   kc.eval('setEffect(5)');
   await kc.clock.frame(2);
   assert.deepEqual([ec.width, ec.height], [720, 960]);
@@ -596,18 +611,56 @@ test('O2: drawPersonInRect at 94% matches the old full-scene placement', async (
 
 /* ---------------- O3: shared backdrop images ---------------- */
 
-test('O3: party backdrops reuse the effect images instead of decoding them again', async () => {
+test('O3: the backdrop thumbnail is a small generated copy, not a second full-size decode', async () => {
   const kc = await loadBooth();
-  assert.equal(kc.eval('bgImages[1]'), kc.eval('uaeBgImg'));
-  assert.equal(kc.eval('bgImages[2]'), kc.eval('starBgImg'));
-  for (const thumb of kc.$('stripFriends').querySelectorAll('img')){
-    assert.match(thumb.src, /FAKE/, 'thumbnail is a small generated copy, not the full-size art');
+  assert.equal(kc.eval('bgImages.length'), kc.eval('PARTY_BACKGROUNDS.length'));
+  const thumbs = kc.$('stripFriends').querySelectorAll('img');
+  assert.equal(thumbs.length, 1);
+  for (const thumb of thumbs) assert.match(thumb.src, /FAKE/);
+});
+
+/* ---------------- removed effects ---------------- */
+
+test('Effects and Add friends both offer Flipbook and Subway Door', async () => {
+  const kc = await loadBooth();
+  const effects = kc.$('stripEffects').querySelectorAll('.reel-thumb').map(b => b.getAttribute('aria-label'));
+  assert.deepEqual(effects, ['Photobooth B&W effect', 'Flipbook effect', 'Subway Door effect']);
+  const backdrops = kc.$('stripFriends').querySelectorAll('.reel-thumb').map(b => b.getAttribute('aria-label'));
+  assert.deepEqual(backdrops, ['Paper backdrop', 'Flipbook backdrop', 'Subway Door backdrop']);
+  assert.deepEqual(kc.eval('EFFECT_ITEMS.map(e => e.id)'), [5, 7, 8]);
+  assert.deepEqual(kc.eval('PARTY_BACKGROUNDS.map(b => b.id)'), ['bg1_paper', 'bg_flipbook', 'bg_subway']);
+  // The drawn scenes get drawn thumbnails, not image files.
+  for (const id of ['effectThumb7', 'effectThumb8', 'bgThumb_bg_flipbook', 'bgThumb_bg_subway']){
+    assert.equal(kc.$(id).localName, 'canvas', id);
   }
+});
+
+test('Starfield and UAE Frame are gone from the page, assets included', () => {
+  const { script, markup } = extractParts();
+  for (const name of ['UAE_BG_SRC', 'UAE_FRAME', 'uaeBgImg', 'STARFIELD_SRC', 'starBgImg',
+    'drawLightWrap', 'effectCutoutCanvas', 'partyBgFrame', 'applyPartyBgLayout', 'presentedVideoSize']){
+    assert.ok(!new RegExp('\\b' + name + '\\b').test(script), name + ' is still referenced');
+  }
+  assert.ok(!/effectCutoutCanvas/.test(markup));
+  assert.ok(!/label:\s*'(UAE|UAE Frame|Starfield)'/.test(script));
+});
+
+test('party mode composites one open scene on the four-frame strip', async () => {
+  const kc = await loadBooth();
+  await startHostParty(kc);
+  await kc.clock.frame(2);
+  const pc = kc.$('partyCanvas');
+  assert.deepEqual([pc.width, pc.height], [960, 720]);
+  assert.equal(pc.style.display, 'block');
+  assert.equal(kc.$('normalStripWrap').hidden, false);
+  assert.equal(kc.$('effectStripWrap').hidden, true);
+  await kc.capture();
+  assert.equal(kc.eval('shots.length'), kc.eval('TOTAL_SHOTS'));
 });
 
 /* ---------------- O4 / D5: layouts ---------------- */
 
-test('O4: each effect lands on the right strip layout', async () => {
+test('O4: Photobooth B&W lands on the single print and back again', async () => {
   const kc = await loadBooth();
   await kc.startCamera();
   const single = () => !kc.$('effectStripWrap').hidden && kc.$('normalStripWrap').hidden
@@ -617,34 +670,403 @@ test('O4: each effect lands on the right strip layout', async () => {
     && !kc.$('effectStrip').classList.contains('single-frame') && !kc.$('pips').hidden
     && kc.$('captureBtn').textContent.startsWith('Take strip');
 
-  kc.eval('setEffect(4)');
-  assert.ok(single());
-  assert.equal(kc.$('effectStripLabel').textContent, 'UAE Frame shot');
   kc.eval('setEffect(5)');
   assert.ok(single());
   assert.equal(kc.$('effectStripLabel').textContent, 'Photobooth shot');
-  kc.eval('setEffect(6)');
-  assert.ok(four());
   assert.equal(kc.$('effectCanvas').style.display, 'block');
   kc.eval('setEffect(0)');
   assert.ok(four());
   assert.equal(kc.$('effectCanvas').style.display, 'none');
 });
 
-test('D5: a removed pose effect id falls back to no effect', async () => {
+test('D5: removed effect ids (pose effects 1-3, UAE Frame 4, Starfield 6) fall back to no effect', async () => {
   const kc = await loadBooth();
-  kc.eval('setEffect(2)');
-  assert.equal(kc.eval('activeEffect'), 0);
+  await kc.startCamera();
+  for (const id of [1, 2, 3, 4, 6]){
+    kc.eval(`setEffect(${id})`);
+    assert.equal(kc.eval('activeEffect'), 0, `effect ${id} was accepted`);
+    assert.equal(kc.$('effectCanvas').style.display, 'none');
+  }
 });
 
 test('O4: a single-shot effect capture fills the print and enables its download', async () => {
   const kc = await loadBooth();
   await kc.startCamera();
-  kc.eval('setEffect(4)');
+  kc.eval('setEffect(5)');
   await kc.clock.frame(1);
   await kc.capture();
   assert.equal(kc.eval('effectShots.length'), 1);
   assert.ok(kc.$('efc0').querySelector('img'));
   assert.equal(kc.$('downloadEffectBtn').disabled, false);
   assert.equal(kc.$('shotCount').textContent, '1 / 1');
+});
+
+/* ---------------- Flipbook ---------------- */
+
+test('Flipbook: a 2:1 book on its own print, ready to make a video', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  assert.ok(singlePrint(kc));
+  assert.equal(kc.$('effectStripLabel').textContent, 'Flipbook');
+  assert.equal(kc.$('captureBtn').textContent, 'Make flipbook (10 s video)');
+  assert.equal(kc.$('viewfinder').style.aspectRatio, '1200 / 600');
+  assert.equal(kc.$('effectCanvas').style.display, 'block');
+  await kc.clock.frame(3);
+  const ec = kc.$('effectCanvas');
+  assert.deepEqual([ec.width, ec.height], [1200, 600]);
+});
+
+test('Flipbook: 25 page turns in the 10 seconds — first at 0, last landing at 10 s', async () => {
+  const kc = await loadBooth();
+  const flipState = kc.eval('flipState');
+  const pages = new Set();
+  let most = 0;
+  for (let t = 0; t < 10000; t += 5){
+    const s = flipState(t);
+    most = Math.max(most, s.flying.length);
+    for (const f of s.flying){
+      pages.add(f.page);
+      assert.ok(f.theta >= 0 && f.theta <= Math.PI, 'angle stays within rotateY(0..-180deg)');
+    }
+  }
+  assert.equal(pages.size, 25);
+  assert.ok(most >= 1 && most <= 2, 'pages in the air: ' + most);
+  // The first page lifts at the shutter press...
+  assert.deepEqual(flipState(0).flying.map(f => [f.page, f.p]), [[0, 0]]);
+  // ...and the last is all but down as the countdown ends, then nothing moves.
+  const end = flipState(9999).flying;
+  assert.equal(end.length, 1);
+  assert.equal(end[0].page, 24);
+  assert.ok(end[0].p > 0.99);
+  assert.deepEqual(flipState(10000).flying, []);
+  assert.deepEqual(flipState(-1).flying, []);
+  const ease = kc.eval('flipEase');
+  assert.equal(ease(0), 0);
+  assert.equal(ease(1), 1);
+});
+
+// Counts flying pages drawn, by wrapping drawFlyingPage inside the page script.
+function countFlips(kc){
+  kc.eval('window.__flips = 0; drawFlyingPage = (orig => (...a) => { window.__flips++; return orig(...a); })(drawFlyingPage)');
+  return () => kc.window.__flips;
+}
+
+test('Flipbook: idle, the book sits still — no pages flip, nothing is recording', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  const flips = countFlips(kc);
+  for (let i = 0; i < 6; i++){
+    await kc.clock.advance(400);                    // timers run as normal...
+    await kc.clock.frame(5);                        // ...and so does the live preview
+  }
+  assert.equal(flips(), 0, 'no page moved');
+  assert.equal(kc.eval('flipbookActive'), null);
+  assert.equal(kc.env.recorders.length, 0);
+  assert.equal(kc.$('recTimer').hidden, true);
+  const ec = kc.$('effectCanvas');
+  assert.deepEqual([ec.width, ec.height], [1200, 600], 'the live book is still drawn');
+});
+
+test('Flipbook: the shutter starts the countdown, the flipping and the recorder in the same instant', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  const flips = countFlips(kc);
+  const pressedAt = kc.clock.now;
+  kc.$('macShutter').click();
+  // Nothing has been awaited: all three are already running, off one clock reading.
+  assert.equal(kc.env.recorders.length, 1);
+  const rec = kc.env.recorders[0];
+  assert.equal(rec.state, 'recording');
+  assert.equal(rec.startedAt, pressedAt);
+  assert.equal(kc.eval('flipbookActive.start'), pressedAt);
+  assert.equal(kc.$('recTimer').hidden, false);
+  assert.equal(kc.$('recTimerText').textContent, '0:10');
+  assert.equal(kc.$('countdown').style.display || 'none', 'none', 'no 4-3-2-1 count-in first');
+  await kc.clock.frame(3);
+  assert.ok(flips() > 0, 'pages flip from the first frame');
+  await kc.clock.advance(3000);
+  assert.equal(kc.$('recTimerText').textContent, '0:07');
+  assert.equal(kc.$('shotCount').textContent, 'Recording 7s');
+});
+
+test('Flipbook: at zero the pages stop, the book settles and the video is ready', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  const flips = countFlips(kc);
+  kc.$('macShutter').click();
+  await kc.clock.advance(10000);
+  const rec = kc.env.recorders[0];
+  assert.equal(rec.state, 'inactive');
+  assert.equal(rec.stoppedAt - rec.startedAt, 10000, 'stopped as the countdown hit zero');
+  assert.equal(rec.stream.canvas, kc.$('effectCanvas'), 'recorded the scene canvas');
+  assert.equal(rec.stream.fps, 30);
+  await kc.clock.advance(50);
+  assert.equal(rec.stream.track.stopped, true, 'canvas stream released');
+  assert.equal(kc.eval('flipbookActive'), null);
+  assert.equal(kc.$('recTimer').hidden, true);
+  const before = flips();
+  await kc.clock.frame(5);
+  assert.equal(flips(), before, 'settled: nothing flips after zero');
+  assert.equal(kc.eval('flipbookResult.kind'), 'video');
+  const v = kc.$('efc0').querySelector('video');
+  assert.ok(v, 'the print plays the flipbook');
+  assert.match(v.src, /^blob:/);
+  assert.equal(v.loop && v.muted && v.autoplay, true);
+  assert.equal(kc.$('downloadEffectBtn').disabled, false);
+  assert.equal(kc.$('shotCount').textContent, '1 / 1');
+  assert.equal(kc.eval('busy'), false);
+});
+
+test('Flipbook: a lifting page keeps its moment while the page beneath stays live', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  kc.$('macShutter').click();
+  await kc.clock.frame(1);
+  const slot0 = kc.eval('fbFlyTex[0]').getContext('2d');
+  slot0.calls = [];
+  await kc.clock.frame(3);                          // page 0 is still in the air
+  assert.equal(slot0.calls.filter(c => c[0] === 'drawImage').length, 0, 'page 0 kept the frame it lifted with');
+  assert.equal(kc.eval('fbFlyPage[0]'), 0);
+  await kc.clock.advance(10050);
+  await kc.clock.frame(1);
+  assert.deepEqual(kc.eval('fbFlyPage.slice()'), [-1, -1, -1], 'pages reset for the next flipbook');
+});
+
+test('Flipbook: every flying page stays hinged on the spine', async () => {
+  const kc = await loadBooth();
+  const pageStrips = kc.eval('pageStrips');
+  const spine = kc.eval('FB_SPINE_X'), W = kc.eval('FB_PAGE_W'), H = kc.eval('FB_PAGE_H');
+  for (const theta of [0, 0.6, Math.PI / 2, 2.4, Math.PI]){
+    for (const curl of [-0.8, 0, 0.8]){
+      const pts = pageStrips(theta, curl);
+      assert.equal(pts.length, kc.eval('FLIPBOOK.strips') + 1);
+      assert.equal(pts[0].x, spine, `theta ${theta}, curl ${curl}`);
+    }
+  }
+  const flat = pageStrips(0, 0);
+  assert.ok(Math.abs(flat.at(-1).x - (spine + W)) < 1e-6, 'flat page lies over the stack');
+  assert.ok(Math.abs(flat.at(-1).h - H) < 1e-6);
+  const over = pageStrips(Math.PI, 0);
+  assert.ok(Math.abs(over.at(-1).x - (spine - W)) < 1e-6, 'turned page lies on the other side');
+});
+
+test('Flipbook: page photos are mapped exactly onto each perspective strip', async () => {
+  const kc = await loadBooth();
+  const triangleTransform = kc.eval('triangleTransform');
+  const src = [{ x: 0, y: 0 }, { x: 31.5, y: 0 }, { x: 31.5, y: 297 }];
+  const dst = [{ x: 222, y: 30 }, { x: 260.4, y: 12.7 }, { x: 260.4, y: 587.3 }];  // a trapezoid half
+  const [a, b, c, d, e, f] = triangleTransform(...src, ...dst);
+  src.forEach((p, i) => {
+    assert.ok(Math.abs(a * p.x + c * p.y + e - dst[i].x) < 1e-9, 'x of corner ' + i);
+    assert.ok(Math.abs(b * p.x + d * p.y + f - dst[i].y) < 1e-9, 'y of corner ' + i);
+  });
+  assert.equal(triangleTransform(src[0], src[0], src[1], ...dst), null, 'degenerate source is refused');
+});
+
+test('Flipbook: the finished video is not mirrored like the live selfie camera', () => {
+  const css = stylesheet();
+  assert.match(rulesFor(css, 'video').join(''), /scaleX\(-1\)/, 'the live camera is mirrored');
+  assert.match(rulesFor(css, '.strip-frame video').join(''), /transform:\s*none/);
+});
+
+test('Flipbook: Download hands the video over inside the tap', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  await kc.capture();
+  kc.$('downloadEffectBtn').click();
+  await kc.flush();                                 // microtasks only: no timers, no frames
+  assert.equal(kc.env.shares.length, 1);
+  const file = kc.env.shares[0].files[0];
+  assert.match(file.name, /^kc-snap-flipbook-\d+\.webm$/);
+  assert.equal(file.type, 'video/webm');
+});
+
+test('Flipbook: records MP4 where the browser can', async () => {
+  const kc = await loadBooth({ videoTypes: ['video/mp4', 'video/webm'] });
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  await kc.capture();
+  assert.equal(kc.env.recorders[0].mimeType, 'video/mp4');
+  kc.$('downloadEffectBtn').click();
+  await kc.flush();
+  assert.match(kc.env.shares[0].files[0].name, /\.mp4$/);
+});
+
+test('Flipbook: without video recording it falls back to a still of the book', async () => {
+  const kc = await loadBooth({ noMediaRecorder: true });
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  await kc.capture();
+  assert.equal(kc.env.recorders.length, 0);
+  assert.equal(kc.eval('flipbookResult.kind'), 'image');
+  assert.ok(kc.$('efc0').querySelector('img'));
+  kc.$('downloadEffectBtn').click();
+  await kc.flush();
+  assert.match(kc.env.shares[0].files[0].name, /^kc-snap-flipbook-\d+\.jpg$/);
+});
+
+test('Flipbook: losing the camera mid-recording leaves no half-made video', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  kc.$('macShutter').click();
+  await kc.clock.advance(5000);                     // halfway through the 10 seconds
+  assert.equal(kc.env.recorders[0].state, 'recording');
+  kc.env.tracks.at(-1).endExternally();
+  await kc.clock.advance(3000);
+  assert.equal(kc.env.recorders[0].state, 'inactive');
+  assert.equal(kc.eval('flipbookResult'), null);
+  assert.equal(kc.eval('flipbookActive'), null, 'the pages stopped too');
+  assert.equal(kc.$('recTimer').hidden, true);
+  assert.equal(kc.eval('busy'), false);
+  assert.equal(kc.$('downloadEffectBtn').disabled, true);
+});
+
+test('Flipbook: leaving it discards the video and frees its memory', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  await kc.capture();
+  const url = kc.eval('flipbookResult.url');
+  assert.ok(resolveObjectURL(url), 'video blob is live');
+  kc.eval('setEffect(0)');
+  assert.equal(kc.eval('flipbookResult'), null);
+  assert.equal(resolveObjectURL(url), undefined, 'blob URL revoked');
+  assert.equal(kc.$('downloadEffectBtn').disabled, true);
+});
+
+/* ---------------- Subway Door ---------------- */
+
+test('Subway Door: one framed photo of the 1200x900 door scene', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(SUBWAY_ID)');
+  assert.ok(singlePrint(kc));
+  assert.equal(kc.$('effectStripLabel').textContent, 'Subway Door shot');
+  assert.equal(kc.$('captureBtn').textContent, 'Take photo (1 shot)');
+  await kc.clock.frame(3);
+  const ec = kc.$('effectCanvas');
+  assert.deepEqual([ec.width, ec.height], [1200, 900]);
+  await kc.capture();
+  assert.equal(kc.eval('effectShots.length'), 1);
+  kc.$('downloadEffectBtn').click();
+  await kc.clock.advance(50);
+  assert.match(kc.env.shares[0].files[0].name, /^kc-snap-subway-\d+\.jpg$/);
+});
+
+test('Subway Door: the template puts the windows in the door and the feed across both', async () => {
+  const kc = await loadBooth();
+  const S = kc.eval('SUBWAY');
+  const inside = (r, o) => r.x >= o.x && r.y >= o.y && r.x + r.w <= o.x + o.w && r.y + r.h <= o.y + o.h;
+  assert.equal(S.windows.length, 2);
+  for (const w of S.windows){
+    assert.ok(inside(w, S.opening), 'window sits in the door');
+    assert.ok(inside(w, S.feed), 'the live feed covers the window');
+    assert.ok(inside(w, S.interior), 'the carriage is drawn behind the window');
+  }
+  assert.ok(S.windows[0].x + S.windows[0].w < 600 && S.windows[1].x > 600, 'one window per leaf');
+  assert.equal(S.labels.left, '<-- Skipped backward 3 seconds');
+  assert.equal(S.labels.right, 'Next ->');
+  const ctx = kc.document.createElement('canvas').getContext('2d');
+  ctx.calls = [];
+  kc.eval('paintSubwayFront')(ctx);
+  const texts = ctx.calls.filter(c => c[0] === 'fillText').map(c => c[1]);
+  assert.deepEqual(texts, [S.labels.left, S.labels.right]);
+});
+
+test('Subway Door: the reflection is see-through, screened over the carriage and under the frame', async () => {
+  const kc = await loadBooth();
+  await kc.startCamera();
+  kc.eval('setEffect(SUBWAY_ID)');
+  await kc.clock.frame(1);
+  const ctx = kc.$('effectCanvas').getContext('2d');
+  ctx.calls = [];
+  await kc.clock.frame(1);
+  const draws = ctx.calls.filter(c => c[0] === 'drawImage');
+  const at = (img) => draws.findIndex(c => c[1] === img);
+  const interior = at(kc.eval("subwayLayer('interior')"));
+  const reflection = at(kc.eval('subwayReflection'));
+  const front = at(kc.eval("subwayLayer('front')"));
+  assert.ok(interior >= 0 && reflection > interior && front > reflection, 'carriage, then reflection, then door');
+  assert.equal(draws[reflection].op, 'screen');
+  assert.ok(draws[reflection].alpha > 0 && draws[reflection].alpha < 1);
+});
+
+test('Subway Door uses the AI cutout on its own, and says so while it loads', async () => {
+  const kc = await loadBooth({ segmentation: true });
+  await kc.startCamera();
+  kc.eval('setEffect(SUBWAY_ID)');
+  const before = kc.env.segSends;
+  await kc.clock.frame(20);
+  assert.ok(kc.env.segSends > before, 'segmentation runs for the effect');
+  await kc.clock.advance(800);
+  assert.equal(kc.$('segStatus').hidden, false);
+  assert.match(kc.$('segStatus').textContent, /Loading AI cutout/);
+  kc.eval('setEffect(FLIPBOOK_ID)');               // the flipbook needs no cutout
+  const during = kc.env.segSends;
+  await kc.clock.frame(20);
+  assert.equal(kc.env.segSends, during);
+  await kc.clock.advance(800);
+  assert.equal(kc.$('segStatus').hidden, true);
+});
+
+/* ---------------- the scenes as party backdrops ---------------- */
+
+test('party: the Subway Door backdrop puts you both in the windows, one framed photo', async () => {
+  const kc = await loadBooth();
+  const { conn } = await startHostParty(kc);
+  const subway = backdrop(kc, 'bg_subway');
+  kc.eval(`selectBgIndex(${subway}, true)`);
+  assert.deepEqual(conn.sent.at(-1), { type: 'bg', index: subway }, 'the friend is told');
+  assert.ok(singlePrint(kc));
+  assert.equal(kc.$('effectStripLabel').textContent, 'Subway Door shot');
+  await kc.clock.frame(2);
+  const pc = kc.$('partyCanvas');
+  assert.deepEqual([pc.width, pc.height], [1200, 900]);
+  await kc.capture();
+  assert.equal(kc.eval('effectShots.length'), 1);
+  assert.equal(kc.$('downloadEffectBtn').disabled, false);
+});
+
+test('party: the Flipbook backdrop records the party scene as the flipbook', async () => {
+  const kc = await loadBooth();
+  await startHostParty(kc);
+  kc.eval(`selectBgIndex(${backdrop(kc, 'bg_flipbook')}, true)`);
+  assert.equal(kc.$('captureBtn').textContent, 'Make flipbook (10 s video)');
+  await kc.clock.frame(2);
+  const pc = kc.$('partyCanvas');
+  assert.deepEqual([pc.width, pc.height], [1200, 600]);
+  await kc.capture();
+  assert.equal(kc.env.recorders[0].stream.canvas, pc);
+  assert.equal(kc.eval('flipbookResult.kind'), 'video');
+  assert.ok(kc.$('efc0').querySelector('video'));
+});
+
+test('party: leaving a drawn backdrop returns to the four-frame strip', async () => {
+  const kc = await loadBooth();
+  await startHostParty(kc);
+  kc.eval(`selectBgIndex(${backdrop(kc, 'bg_subway')}, true)`);
+  assert.ok(singlePrint(kc));
+  kc.eval("exitPartyMode('You left the party.')");
+  assert.equal(kc.$('normalStripWrap').hidden, false);
+  assert.equal(kc.$('effectStripWrap').hidden, true);
+  assert.equal(kc.$('pips').hidden, false);
+});
+
+test('both scenes draw where ctx.filter is missing (older iOS)', async () => {
+  const kc = await loadBooth({ ctxFilter: 'expando' });
+  await kc.startCamera();
+  const ec = kc.$('effectCanvas');
+  kc.eval('setEffect(FLIPBOOK_ID)');
+  await kc.clock.frame(2);
+  assert.deepEqual([ec.width, ec.height], [1200, 600]);
+  kc.eval('setEffect(SUBWAY_ID)');
+  await kc.clock.frame(2);
+  assert.deepEqual([ec.width, ec.height], [1200, 900]);
 });

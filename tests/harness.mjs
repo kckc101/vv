@@ -423,7 +423,14 @@ class Ctx2D {
     this.imageSmoothingQuality = 'low';
     this.calls = null;      // set to [] to record calls
   }
-  _rec(name, args){ if (this.calls) this.calls.push([name, ...args]); }
+  // Each recorded call also notes the blend mode and alpha it was made under.
+  _rec(name, args){
+    if (!this.calls) return;
+    const entry = [name, ...args];
+    entry.op = this.globalCompositeOperation;
+    entry.alpha = this.globalAlpha;
+    this.calls.push(entry);
+  }
   _filterInverts(){ return false; }
   _tint(rgba){
     if (!this._filterInverts()) return rgba;
@@ -439,7 +446,7 @@ class Ctx2D {
       }
     }
   }
-  save(){} restore(){} setTransform(){} resetTransform(){} translate(){} scale(){} rotate(){}
+  save(){} restore(){} setTransform(){} resetTransform(){} transform(){} translate(){} scale(){} rotate(){}
   beginPath(){} closePath(){} moveTo(){} lineTo(){} rect(){} roundRect(){} arc(){} arcTo(){}
   fill(){} stroke(){} clip(){} strokeRect(){}
   clearRect(x, y, w, h){ this._paint(x, y, w, h, [0, 0, 0, 0]); }
@@ -527,6 +534,14 @@ class FakeCanvas extends FakeElement {
     const blob = env.toBlobReturnsNull ? null : new Blob(['fake ' + this._w + 'x' + this._h], { type });
     // Asynchronous, as in a browser: encoding happens off the current task.
     env.clock.setTimeout(() => cb(blob), 0);
+  }
+  // A live video track of this canvas, for MediaRecorder.
+  captureStream(fps){
+    const env = this.ownerDocument.env;
+    const track = { kind: 'video', stopped: false, stop(){ this.stopped = true; } };
+    const stream = { canvas: this, fps, track, getTracks: () => [track] };
+    env.captureStreams.push(stream);
+    return stream;
   }
 }
 
@@ -738,6 +753,40 @@ function makeSegmentationClass(env){
   };
 }
 
+/* MediaRecorder: records nothing, but keeps the browser's shape — start(),
+   then stop() delivers one dataavailable and a stop event on a later task.
+   env.videoTypes is what isTypeSupported() says yes to. */
+function makeMediaRecorderClass(env){
+  return class FakeMediaRecorder {
+    static isTypeSupported(type){ return env.videoTypes.includes(type); }
+    constructor(stream, options = {}){
+      this.stream = stream;
+      this.mimeType = options.mimeType || '';
+      this.state = 'inactive';
+      this.ondataavailable = null;
+      this.onstop = null;
+      this.onerror = null;
+      this.startedAt = null;
+      this.stoppedAt = null;
+      env.recorders.push(this);
+    }
+    start(timeslice){
+      this.state = 'recording';
+      this.timeslice = timeslice;
+      this.startedAt = env.clock.now;
+    }
+    stop(){
+      if (this.state === 'inactive') return;
+      this.state = 'inactive';
+      this.stoppedAt = env.clock.now;
+      env.clock.setTimeout(() => {
+        if (this.ondataavailable) this.ondataavailable({ data: new Blob(['fake video'], { type: this.mimeType }) });
+        if (this.onstop) this.onstop();
+      }, 0);
+    }
+  };
+}
+
 function facingOf(constraints){
   const v = constraints && constraints.video;
   return (v && typeof v === 'object' && v.facingMode) ? v.facingMode.ideal || v.facingMode.exact : undefined;
@@ -755,6 +804,9 @@ function makeEnv(opts){
   const env = {
     peers: [], tracks: [], shares: [], anchorClicks: [], segs: [],
     gumCalls: 0, gumLog: [], segSends: 0, dataUrlSeq: 0, scrollIntoViewCalls: 0,
+    recorders: [], captureStreams: [],
+    // What MediaRecorder.isTypeSupported() accepts: WebM only by default, as in Firefox.
+    videoTypes: opts.videoTypes || ['video/webm;codecs=vp8', 'video/webm'],
     imageSizes: new Map(),
     ctxFilter: opts.ctxFilter || 'native',
     toBlobReturnsNull: !!opts.toBlobReturnsNull,
@@ -808,6 +860,8 @@ function makeEnv(opts){
 
   const Peer = makePeerClass(env);
   const SelfieSegmentation = opts.segmentation ? makeSegmentationClass(env) : undefined;
+  // noMediaRecorder: a browser that can't record video (older Safari, some WebViews).
+  const MediaRecorder = opts.noMediaRecorder ? undefined : makeMediaRecorderClass(env);
   const mobile = !!opts.mobile;
   const Image = function Image(){ return env.document.createElement('img'); };
 
@@ -817,6 +871,7 @@ function makeEnv(opts){
     crypto: globalThis.crypto,
     Peer,
     SelfieSegmentation,
+    MediaRecorder,
   };
 
   env.globals = {
@@ -839,6 +894,8 @@ function makeEnv(opts){
     crypto: globalThis.crypto,
     Peer,
     SelfieSegmentation,
+    MediaRecorder,
+    Blob,
   };
   return env;
 }
