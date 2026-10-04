@@ -44,7 +44,8 @@ export default [
         requestAnimationFrame: 'readonly',
         setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly',
-        Image: 'readonly', File: 'readonly', Blob: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+        Image: 'readonly', File: 'readonly', Blob: 'readonly', atob: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
+        HTMLCanvasElement: 'readonly', OffscreenCanvas: 'readonly',   // watched for lost WebGL contexts
         MediaRecorder: 'readonly',        // the Flipbook video
         Peer: 'readonly',                 // PeerJS, from jsdelivr
         SelfieSegmentation: 'readonly',   // MediaPipe, from jsdelivr

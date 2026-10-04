@@ -4,7 +4,7 @@ An online photo booth in a single HTML page. Shoot a four-frame strip from a
 phone or laptop, add a filter or an effect, or connect a second device for party
 mode and appear in one shared frame.
 
-Effects, all drawn in code (no image files):
+Effects:
 
 - **Photobooth B&W**: you, toned and pinned to a corkboard; one framed photo.
 - **Flipbook**: a vintage photobooth flipbook with you on its top page. It
@@ -14,6 +14,13 @@ Effects, all drawn in code (no image files):
   a still of the book where video recording isn't available).
 - **Subway Door**: you, as a see-through reflection in the windows of a train
   door, with the empty carriage visible behind the glass; one framed photo.
+- **Living Room**: the KC Studio 2-frame template (a dark living room with a
+  leather sofa). The AI cutout seats you on the sofa in both windows; the
+  shutter takes two shots, each after a 3-second countdown, top window first.
+  The template and both shots are flattened into one 1416x2484 JPEG.
+
+All but Living Room are drawn in code; Living Room uses the supplied template
+image, embedded in `index.html`.
 
 Flipbook and Subway Door are also party backdrops, alongside Paper.
 
@@ -33,9 +40,26 @@ python -m http.server 8000
 then open <http://localhost:8000/>.
 
 It needs an internet connection: PeerJS (party mode) and MediaPipe (the AI
-cutout, used by party mode and Subway Door) load from jsdelivr.
+cutout, used by party mode, Subway Door and Living Room) load from jsdelivr.
 
-## Party mode across networks
+## Party mode
+
+- **One stage for both devices.** The shared scene is a fixed 1280x720 canvas
+  and the viewfinder takes its shape, so what you see is what's shot, on a
+  phone or a laptop, host or guest.
+- **Same picture on both screens.** The host stands on the left and the guest
+  on the right on both devices, each drawn mirrored the way their own device
+  shows them (the devices tell each other).
+- **Mixed cameras.** Each person fills their own half with cover-fit and no
+  stretching, so a portrait phone (720x1280) next to a landscape webcam
+  (1280x720) comes out at a comparable size.
+- **Network switches.** If the connection drops without a goodbye (Wi-Fi to
+  mobile data, say), the booth stays in the party and reconnects for up to 45
+  seconds. Leaving sends a goodbye, so the other side ends at once.
+- **AI cutout.** The two feeds take turns on the model (one inference per tick,
+  input capped at 360p, or 320 px on phones), and people are redrawn live
+  between masks. A lost WebGL context rebuilds the model in a couple of
+  seconds.
 
 Party mode uses STUN only, which can't connect two devices when one of them is
 behind a strict NAT (common on mobile data and office Wi-Fi). Add a TURN relay

@@ -13,6 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { inspect } from 'node:util';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -275,6 +276,13 @@ function makeStyle(){
 }
 
 class FakeElement extends FakeEventTarget {
+  // Printed short: every element reaches the whole fake page through
+  // ownerDocument, so a failed assertion that printed it in full ran Node out
+  // of memory instead of reporting the failure.
+  [inspect.custom](){
+    const size = this.localName === 'canvas' ? ' ' + this.width + 'x' + this.height : '';
+    return '<' + this.localName + (this.id ? '#' + this.id : '') + size + '>';
+  }
   constructor(doc, tag){
     super();
     this.ownerDocument = doc;
@@ -421,7 +429,8 @@ class Ctx2D {
     this.shadowOffsetY = 0;
     this.imageSmoothingEnabled = true;
     this.imageSmoothingQuality = 'low';
-    this.calls = null;      // set to [] to record calls
+    // Set to [] to record calls; loadBooth({ recordCalls: true }) records on every canvas.
+    this.calls = canvas.ownerDocument.env.recordCalls ? [] : null;
   }
   // Each recorded call also notes the blend mode and alpha it was made under.
   _rec(name, args){
@@ -516,6 +525,8 @@ class FakeCanvas extends FakeElement {
   set height(v){ this._h = Math.max(0, Math.floor(Number(v)) || 0); this._resetPixels(); }
   _resetPixels(){ this._pixels = (this._w * this._h <= 64) ? new Uint8ClampedArray(this._w * this._h * 4) : null; }
   getContext(type){
+    // A stand-in WebGL context, so the page's context-loss watch has something to attach to.
+    if (type === 'webgl' || type === 'webgl2') return this._gl || (this._gl = { isContextLost: () => false });
     if (type !== '2d') return null;
     if (!this._ctx){
       const mode = this.ownerDocument.env.ctxFilter;
@@ -627,6 +638,7 @@ class FakeImg extends FakeElement {
 }
 
 class FakeDocument extends FakeEventTarget {
+  [inspect.custom](){ return '<document>'; }
   constructor(env){
     super();
     this.env = env;
@@ -641,7 +653,7 @@ class FakeDocument extends FakeEventTarget {
   }
   createElement(tag){
     tag = String(tag).toLowerCase();
-    if (tag === 'canvas') return new FakeCanvas(this);
+    if (tag === 'canvas') return new this.env.CanvasClass(this);
     if (tag === 'video') return new FakeVideo(this);
     if (tag === 'img') return new FakeImg(this);
     return new FakeElement(this, tag);
@@ -697,6 +709,32 @@ class Emitter {
   }
 }
 
+/* The call's RTCPeerConnection, as far as the page uses it: senders, and the
+   two connection states with their change events. Tests drive the network
+   with setState('disconnected' | 'failed' | 'connected' | ...). */
+export class FakePeerConnection extends FakeEventTarget {
+  constructor(){
+    super();
+    this.iceConnectionState = 'connected';
+    this.connectionState = 'connected';
+    // One video sender; setParameters() keeps what the page asked for.
+    this.videoSender = {
+      track: { kind: 'video' },
+      params: null,
+      getParameters(){ return { encodings: [{}] }; },
+      setParameters(p){ this.params = p; return Promise.resolve(); },
+      replaceTrack(){ return Promise.resolve(); },
+    };
+  }
+  getSenders(){ return [this.videoSender]; }
+  setState(ice, state = ice){
+    this.iceConnectionState = ice;
+    this.connectionState = state;
+    this._fire(new FakeEvent('iceconnectionstatechange'));
+    this._fire(new FakeEvent('connectionstatechange'));
+  }
+}
+
 export class FakeMediaConnection extends Emitter {
   constructor(peerId, stream){
     super();
@@ -705,7 +743,7 @@ export class FakeMediaConnection extends Emitter {
     this.open = false;
     this.closed = false;
     this.answeredWith = undefined;
-    this.peerConnection = { getSenders: () => [], addEventListener(){}, iceConnectionState: 'connected', connectionState: 'connected' };
+    this.peerConnection = new FakePeerConnection();
   }
   answer(s){ this.answeredWith = s; this.open = true; }
   close(){ if (this.closed) return; this.closed = true; this.open = false; this.emit('close'); }
@@ -810,8 +848,12 @@ function makeEnv(opts){
     imageSizes: new Map(),
     ctxFilter: opts.ctxFilter || 'native',
     toBlobReturnsNull: !!opts.toBlobReturnsNull,
+    recordCalls: !!opts.recordCalls,
   };
   env.clock = new FakeClock();
+  // A canvas class of this booth's own: the page wraps HTMLCanvasElement.prototype.getContext
+  // (to watch WebGL contexts), and that must not leak into the next booth a test loads.
+  env.CanvasClass = class EnvCanvas extends FakeCanvas {};
   env.document = new FakeDocument(env);
   const cam = opts.camera || { w: 1280, h: 720 };
 
@@ -865,14 +907,17 @@ function makeEnv(opts){
   const mobile = !!opts.mobile;
   const Image = function Image(){ return env.document.createElement('img'); };
 
-  env.window = {
+  // An event target, like the real one: the page listens for resize,
+  // orientationchange, pageshow and pagehide on it.
+  env.window = Object.assign(new FakeEventTarget(), {
     matchMedia: () => ({ matches: mobile, addEventListener(){}, removeEventListener(){} }),
     isSecureContext: true,
     crypto: globalThis.crypto,
     Peer,
     SelfieSegmentation,
     MediaRecorder,
-  };
+    HTMLCanvasElement: env.CanvasClass,
+  });
 
   env.globals = {
     window: env.window,
@@ -896,6 +941,8 @@ function makeEnv(opts){
     SelfieSegmentation,
     MediaRecorder,
     Blob,
+    atob: globalThis.atob,
+    HTMLCanvasElement: env.CanvasClass,
   };
   return env;
 }
